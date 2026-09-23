@@ -355,7 +355,8 @@
     <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
         <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">베이스맵 선택</div>
         <select id="base-map-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
-            <option value="mapbox-satellite" selected>Mapbox Satellite</option>
+            <option value="esri-satellite" selected>ESRI Satellite</option>
+            <option value="mapbox-satellite">Mapbox Satellite</option>
             <option value="mapbox-streets">Mapbox Streets</option>
         </select>
     </div>
@@ -617,6 +618,14 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
 
     const MAPBOX_TOKEN = "{{ MAPBOX_TOKEN }}";
     function getBaseMapProvider(type) {
+        if (type === 'esri-satellite') {
+            // ESRI World Imagery (ArcGIS Online 타일)
+            return new Cesium.UrlTemplateImageryProvider({
+                url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                maximumLevel: 19,
+                credit: 'Esri World Imagery'
+            });
+        }
         if (type === 'mapbox-streets') {
             // Mapbox Static Images API는 vector 스타일(streets)을 지원하지 않아 410 에러 발생.
             // streets 라벨은 OpenStreetMap raster 타일로 대체.
@@ -632,7 +641,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     }
 
     if (viewer) {
-        viewer.imageryLayers.addImageryProvider(getBaseMapProvider());
+        viewer.imageryLayers.addImageryProvider(getBaseMapProvider('esri-satellite'));
 
         viewer.camera.setView({
             destination: Cesium.Cartesian3.fromDegrees(127, 26, 100000000),
