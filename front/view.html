@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D 바람 데이터 시각화</title>
+<link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Widgets/widgets.css">
+<style>
+    html,
+    body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #cesiumContainer {
+        width: 100%;
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .cesium-viewer-bottom {
+        display: none !important;
+    }
+
+    /* 접기/펴기 애니메이션 스타일 */
+    #slider-panel {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 999;
+        background: rgba(15, 23, 42, 0.9);
+        padding: 14px;
+        border-radius: 8px;
+        color: #fff;
+        font-family: sans-serif;
+        border: 1px solid #334155;
+        width: 230px;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    /* 접혔을 때 왼쪽으로 이동 */
+    #slider-panel.collapsed {
+        transform: translateX(-250px);
+    }
+
+    /* 패널 내용 스크롤 영역 (토글 버튼은 스크롤 영역 밖의 #slider-panel에 위치) */
+    #slider-panel-scroll {
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 4px;
+        scrollbar-width: thin;
+        scrollbar-color: #475569 transparent;
+    }
+    #slider-panel-scroll::-webkit-scrollbar {
+        width: 6px;
+    }
+    #slider-panel-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    #slider-panel-scroll::-webkit-scrollbar-thumb {
+        background: #475569;
+        border-radius: 3px;
+    }
+
+    /* 접기/펴기 가능한 섹션 (디폴트: 접힘) */
+    .panel-section {
+        margin-bottom: 8px;
+    }
+    .panel-section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid #475569;
+        border-radius: 6px;
+        padding: 6px 8px;
+        cursor: pointer;
+        font-size: 11px;
+        color: #f8fafc;
+        font-weight: bold;
+        user-select: none;
+    }
+    .panel-section-header .section-arrow {
+        color: #38bdf8;
+        font-size: 10px;
+        transition: transform 0.2s ease;
+    }
+    .panel-section.open .section-arrow {
+        transform: rotate(90deg);
+    }
+    .panel-section-body {
+        display: none;
+        padding: 8px 2px 0 2px;
+    }
+    .panel-section.open .panel-section-body {
+        display: block;
+    }
+
+    /* 책갈피 형태의 토글 버튼 */
+    #toggle-panel-btn {
+        position: absolute;
+        right: -28px;
+        top: 12px;
+        width: 28px;
+        height: 36px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid #334155;
+        border-left: none;
+        border-radius: 0 6px 6px 0;
+        color: #38bdf8;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+
+    .control-group {
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid #475569;
+        border-radius: 6px;
+        padding: 8px;
+        margin-bottom: 8px;
+    }
+
+    /* 풍속 필터: 겹쳐진 듀얼 range 슬라이더 */
+    #speed-filter-range .dual-range {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 24px;
+        margin: 0;
+        background: transparent;
+        pointer-events: none;
+        -webkit-appearance: none;
+        appearance: none;
+    }
+    #speed-filter-range .dual-range::-webkit-slider-runnable-track {
+        background: transparent;
+    }
+    #speed-filter-range .dual-range::-moz-range-track {
+        background: transparent;
+    }
+    #speed-filter-range .dual-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        pointer-events: auto;
+        width: 14px;
+        height: 14px;
+        margin-top: 5px;
+        border-radius: 50%;
+        background: #38bdf8;
+        border: 2px solid #0f172a;
+        cursor: pointer;
+    }
+    #speed-filter-range .dual-range::-moz-range-thumb {
+        pointer-events: auto;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #38bdf8;
+        border: 2px solid #0f172a;
+        cursor: pointer;
+    }
+
+    /* 우측 하단 등에 자동 생성되는 불필요한 기본 범례 박스 강제 숨김 처리 */
+    .wind-legend-container, div[style*="position: absolute"][style*="bottom: 20px; right: 20px;"] {
+        display: none !important;
+    }
+
+    /* 우측 상단: 풍속 (m/s) 세로 범례 패널 */
+    #wind-legend-panel {
+        position: absolute;
+        top: 140px;
+        right: 4px;
+        z-index: 999;
+        background: rgba(15, 23, 42, 0.9);
+        padding: 10px 12px;
+        border-radius: 8px;
+        color: #fff;
+        font-family: sans-serif;
+        border: 1px solid #334155;
+    }
+    #wind-legend-panel .legend-title {
+        font-size: 11px;
+        color: #ccc;
+        margin-bottom: 6px;
+        text-align: center;
+    }
+    #wind-legend-body {
+        display: flex;
+        gap: 4px;
+    }
+    #legend-gradient-bar {
+        width: 10px;
+        height: 160px;
+        border-radius: 3px;
+        background: linear-gradient(to top, rgb(0,76,230), rgb(0,204,230), rgb(25,204,50), rgb(230,230,0), rgb(230,25,25));
+    }
+    #legend-labels-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        font-size: 9px;
+        color: #aaa;
+        text-align: right;
+    }
+
+    /* 화면 중앙 하단: 선택된 데이터셋 메타데이터 표시 */
+    #dataset-info-panel {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 999;
+        background: rgba(15, 23, 42, 0.9);
+        padding: 10px 16px;
+        border-radius: 8px;
+        color: #fff;
+        font-family: sans-serif;
+        border: 1px solid #334155;
+        display: flex;
+        gap: 24px;
+        align-items: center;
+        min-width: 260px;
+    }
+
+    #dataset-info-panel .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    #dataset-info-panel .info-title {
+        font-size: 11px;
+        color: #38bdf8;
+        font-weight: bold;
+    }
+
+    #dataset-info-panel .info-value {
+        font-size: 11px;
+        color: #f8fafc;
+        word-break: break-all;
+    }
+
+    /* 데이터셋 로딩 중: dimmed 오버레이 + 스피너 */
+    #loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.55);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        pointer-events: all;
+    }
+
+    #loading-overlay .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid rgba(255, 255, 255, 0.2);
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: loading-spin 0.9s linear infinite;
+    }
+
+    #loading-overlay .loading-text {
+        color: #e2e8f0;
+        font-size: 13px;
+        font-family: sans-serif;
+    }
+
+    @keyframes loading-spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+</head>
+<body>
+<div id="cesiumContainer"></div>
+
+<!-- 데이터셋 로딩 중 오버레이 (dimmed + 스피너) -->
+<div id="loading-overlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">데이터셋 로딩 중...</div>
+</div>
+
+<div id="dataset-info-panel">
+    <div class="info-item">
+        <span class="info-title">file</span>
+        <span class="info-value" id="dataset-file-name">-</span>
+    </div>
+    <div class="info-item">
+        <span class="info-title">utc date</span>
+        <span class="info-value" id="dataset-date-utc">-</span>
+    </div>
+</div>
+
+<!-- 풍속 Color Map 세로 범례 (JS 스크립트 로드 후 동적 반영) -->
+<div id="wind-legend-panel">
+    <div class="legend-title">풍속</div>
+    <div id="wind-legend-body">
+        <div id="legend-gradient-bar"></div>
+        <div id="legend-labels-container">
+            <span>150</span><span>112.5</span><span>75</span><span>37.5</span><span>0</span>
+        </div>
+    </div>
+    <div class="legend-title">m/s</div>
+</div>
+
+<div id="slider-panel">
+    <button id="toggle-panel-btn" title="패널 접기/펴기">◀</button>
+    <h3 style="margin:0 0 10px 0; font-size:13px; color:#38bdf8;">단면도 및 스케일 제어</h3>
+
+    <!-- 데이터셋 선택 (3km / 8km 격자) -->
+    <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+        <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">데이터셋 선택</div>
+        <select id="dataset-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
+            <option value="3km">3km 격자 (r030 동아시아)</option>
+            <option value="8km" selected>8km 격자 (g576 동아시아)</option>
+        </select>
+        <div id="dataset-status" style="font-size:9px; color:#94a3b8; margin-top:3px;"></div>
+    </div>
+
+
+    <!-- 고도 과장 배율 (접기/펴기 없음) -->
+    <div id="section-height-scale-wrap" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+        <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">
+            고도 과장 배율: <span id="scale-val">20</span>x
+        </div>
+        <input type="range" id="height-scale" min="10" max="70" step="1" value="20" style="width:100%;">
+        <div id="hs-labels" style="display:flex; justify-content:space-between; padding-top:2px;">
+            <span style="font-size:9px; color:#94a3b8;">1</span>
+            <span style="font-size:9px; color:#94a3b8;">2</span>
+            <span style="font-size:9px; color:#94a3b8;">3</span>
+            <span style="font-size:9px; color:#94a3b8;">4</span>
+            <span style="font-size:9px; color:#94a3b8;">5</span>
+            <span style="font-size:9px; color:#94a3b8;">6</span>
+            <span style="font-size:9px; color:#94a3b8;">7</span>
+        </div>
+    </div>
+
+    <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+        <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">베이스맵 선택</div>
+        <select id="base-map-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
+            <option value="mapbox-satellite" selected>Mapbox Satellite</option>
+            <option value="mapbox-streets">Mapbox Streets</option>
+        </select>
+    </div>
+
+    <!-- [분리된 토글 1] 3D 범위 박스(와이어프레임) 표시 제어 -->
+    <div id="section-box-frame" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <span style="font-size:11px; color:#38bdf8; font-weight:bold;">3D 범위 박스</span>
+        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" id="toggle-box-frame" style="cursor:pointer;"> 표시
+        </label>
+    </div>
+
+    <!-- [분리된 토글 2] 고도(기압) 레벨 텍스트 표시 제어 -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+        <span style="font-size:11px; color:#38bdf8; font-weight:bold;">고도(기압) 레벨 텍스트</span>
+        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" id="toggle-legend-text" checked style="cursor:pointer;"> 표시
+        </label>
+    </div>
+
+    <div id="slider-panel-scroll">
+
+    <!-- 격자 시각화 (지면 단면 / 24레벨 직육면체) -->
+    <div class="panel-section" id="section-grid-wrap">
+        <div class="panel-section-header">
+            <span>격자 시각화</span>
+            <span style="display:flex; align-items:center; gap:8px;">
+                <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px; font-weight:normal;">
+                    <input type="checkbox" id="toggle-grid" style="cursor:pointer;"> 표시
+                </label>
+                <span class="section-arrow">▶</span>
+            </span>
+        </div>
+        <div class="panel-section-body">
+    <div class="control-group" id="section-grid">
+            <div style="display:flex; flex-direction:column; gap:3px;">
+                <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                    <input type="radio" name="grid-mode" value="ground" checked style="cursor:pointer;">
+                    <span>지면 단면 격자</span>
+                </label>
+                <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                    <input type="radio" name="grid-mode" value="levels" style="cursor:pointer;">
+                    <span>24레벨 격자 (직육면체)</span>
+                </label>
+            </div>
+            <div style="margin-top:6px;">
+                <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1;">
+                    <span>격자 묶음 (step)</span>
+                    <span id="grid-step-val" style="color:#f8fafc;">50</span>
+                </div>
+                <input type="range" id="grid-step-slider" min="1" max="50" step="1" value="50"
+                    style="width:100%; cursor:pointer;">
+                <div style="display:flex; justify-content:space-between; font-size:9px; color:#64748b; padding-top:2px;">
+                    <span>1</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span>
+                </div>
+            </div>
+    </div>
+        </div>
+    </div>
+
+    <!-- 바람장 파티클 레이어 (하층/중층/상층) 토글 -->
+    <div class="panel-section" id="section-wind-layers-wrap">
+        <div class="panel-section-header">
+            <span>바람장 레이어</span>
+            <span class="section-arrow">▶</span>
+        </div>
+        <div class="panel-section-body">
+    <div class="control-group" id="section-wind-layers">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="toggle-layer-low" checked style="cursor:pointer;">
+                <span>하층 (1000–700 hPa)</span>
+            </label>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="toggle-layer-mid" checked style="cursor:pointer;">
+                <span>중층 (650–300 hPa)</span>
+            </label>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="toggle-layer-high" checked style="cursor:pointer;">
+                <span>상층 (250–50 hPa)</span>
+            </label>
+        </div>
+    </div>
+        </div>
+    </div>
+
+    <!-- 바람장 파티클 풍속 필터 (듀얼 슬라이더 + 풍속 등급 라디오) -->
+    <div class="panel-section" id="section-speed-filter-wrap">
+        <div class="panel-section-header">
+            <span>풍속 필터 (m/s)</span>
+            <span class="section-arrow">▶</span>
+        </div>
+        <div class="panel-section-body">
+    <div class="control-group" id="section-speed-filter">
+        <div id="speed-filter-range" style="position:relative; height:24px; margin:8px 0 4px 0;">
+            <div style="position:absolute; top:10px; left:0; right:0; height:4px; background:#334155; border-radius:2px;"></div>
+            <div id="speed-filter-track" style="position:absolute; top:10px; left:0; width:100%; height:4px; background:#38bdf8; border-radius:2px;"></div>
+            <input type="range" id="speed-filter-min" class="dual-range" min="0" max="70" step="5" value="0">
+            <input type="range" id="speed-filter-max" class="dual-range" min="0" max="70" step="5" value="70">
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:9px; color:#94a3b8;">
+            <span>0</span><span>17.5</span><span>35</span><span>52.5</span><span>70</span>
+        </div>
+        <div id="speed-filter-label" style="font-size:10px; color:#38bdf8; margin-top:4px;">전체 0 ~ 70 m/s</div>
+        <div style="display:flex; flex-direction:column; gap:3px; margin-top:6px;">
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="radio" name="speed-filter-preset" value="all" checked style="cursor:pointer;">
+                <span>전체 (0–70 m/s)</span>
+            </label>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="radio" name="speed-filter-preset" value="light" style="cursor:pointer;">
+                <span>미풍 (0–5 m/s)</span>
+            </label>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="radio" name="speed-filter-preset" value="weak" style="cursor:pointer;">
+                <span>약풍 (6–19 m/s)</span>
+            </label>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="radio" name="speed-filter-preset" value="mod" style="cursor:pointer;">
+                <span>중풍 (20–39 m/s)</span>
+            </label>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="radio" name="speed-filter-preset" value="strong" style="cursor:pointer;">
+                <span>강풍 (40–69 m/s)</span>
+            </label>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="radio" name="speed-filter-preset" value="storm" style="cursor:pointer;">
+                <span>폭풍 (70 m/s 이상)</span>
+            </label>
+        </div>
+    </div>
+        </div>
+    </div>
+
+    <!-- 단면도 레이어 그룹 (X/Y/Z) -->
+    <div class="panel-section" id="section-slice-group">
+        <div class="panel-section-header">
+            <span>단면도 레이어 그룹</span>
+            <span style="display:flex; align-items:center; gap:8px;">
+                <label style="font-size:10px; cursor:pointer; color:#cbd5e1; font-weight:normal;">
+                    <input type="checkbox" id="toggle-all-slices" checked style="cursor:pointer;"> 전체 켜기/끄기
+                </label>
+                <span class="section-arrow">▶</span>
+            </span>
+        </div>
+        <div class="panel-section-body">
+    <!-- X축 (경도) 그룹 -->
+    <div class="control-group" id="section-slice-x">
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
+            <span>X축 (경도): <span id="x-val">0</span>%</span>
+            <label style="cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:2px;">
+                <input type="checkbox" id="toggle-x" checked class="slice-checkbox" style="width:13px; height:13px; cursor:pointer;"> 표시
+            </label>
+        </div>
+        <input type="range" id="slice-x" min="0" max="100" value="0" style="width:100%;">
+    </div>
+
+    <!-- Y축 (위도) 그룹 -->
+    <div class="control-group" id="section-slice-y">
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
+            <span>Y축 (위도): <span id="y-val">100</span>%</span>
+            <label style="cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:2px;">
+                <input type="checkbox" id="toggle-y" checked class="slice-checkbox" style="width:13px; height:13px; cursor:pointer;"> 표시
+            </label>
+        </div>
+        <input type="range" id="slice-y" min="0" max="100" value="100" style="width:100%;">
+    </div>
+
+    <!-- Z축 (고도) 그룹 -->
+    <div class="control-group" id="section-slice-z">
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
+            <span>Z축 (고도): <span id="z-val">0</span>%</span>
+            <label style="cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:2px;">
+                <input type="checkbox" id="toggle-z" class="slice-checkbox" style="width:13px; height:13px; cursor:pointer;"> 표시
+            </label>
+        </div>
+        <input type="range" id="slice-z" min="0" max="100" value="0" style="width:100%;">
+    </div>
+        </div>
+    </div>
+
+    <!-- 환경 조명 옵션 -->
+    <div class="panel-section" id="section-env-lighting-wrap">
+        <div class="panel-section-header">
+            <span>환경 조명</span>
+            <span class="section-arrow">▶</span>
+        </div>
+        <div class="panel-section-body">
+    <div style="margin-top:8px; border-top:1px dashed #475569; padding-top:8px;">
+        <div style="font-size:11px; margin-bottom:6px; color:#f8fafc;">환경 조명</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:11px; color:#38bdf8; font-weight:bold;">하늘 대기 (Sky Atmosphere)</span>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
+                <input type="checkbox" id="toggle-sky-atmosphere" style="cursor:pointer;"> 표시
+            </label>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:11px; color:#38bdf8; font-weight:bold;">태양 조명 (Enable Lighting)</span>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
+                <input type="checkbox" id="toggle-enable-lighting" checked style="cursor:pointer;"> 표시
+            </label>
+        </div>
+    </div>
+        </div>
+    </div>
+
+    </div><!-- /slider-panel-scroll -->
+</div>
+
+<script>
+window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/";
+</script>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Cesium.js"></script>
+
+<script type="module">
+    import { GpuParticleEngine } from '/temp_data/wind3d/GpuParticleEngine.js';
+    import { WindLegendBox } from '/temp_data/wind3d/WindLegendBox.js';
+    import { GridVisualizer } from '/temp_data/wind3d/GridVisualizer.js';
+
+    const CAMERA = {
+        destination: { lon: 128.666575, lat: 23.075479, height: 1618355 },
+        orientation: { heading: 357.6, pitch: -54.5, roll: 0 },
+        duration: 2
+    };
+
+    let viewer;
+    try {
+        viewer = new Cesium.Viewer("cesiumContainer", {
+            animation: false,
+            timeline: false,
+            geocoder: false,
+            homeButton: true,
+            sceneModePicker: true,
+            baseLayerPicker: false,
+            navigationHelpButton: false,
+            fullscreenButton: true,
+            infoBox: false,
+            selectionIndicator: false,
+            imageryProvider: false
+        });
+    } catch (e) {
+        console.error("Cesium Viewer 초기화 실패:", e);
+    }
+
+    async function initTerrain() {
+        if (!viewer) return;
+        try {
+            const koreaRectangle = Cesium.Rectangle.fromDegrees(124.0, 33.0, 132.0, 43.0);
+            const koreaTerrainProvider = await Cesium.CesiumTerrainProvider.fromUrl(
+                "/terrain/korea/v3/",
+                { rectangle: koreaRectangle, requestVertexNormals: true }
+            );
+            viewer.terrainProvider = koreaTerrainProvider;
+        } catch (error) {
+            console.error("Failed to initialize Cesium Terrain:", error);
+        }
+    }
+    // initTerrain();
+
+    const MAPBOX_TOKEN = "{{ MAPBOX_TOKEN }}";
+    function getBaseMapProvider(type) {
+        if (type === 'mapbox-streets') {
+            // Mapbox Static Images API는 vector 스타일(streets)을 지원하지 않아 410 에러 발생.
+            // streets 라벨은 OpenStreetMap raster 타일로 대체.
+            return new Cesium.UrlTemplateImageryProvider({
+                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                credit: '© OpenStreetMap contributors'
+            });
+        }
+        // 기본: Mapbox Satellite (raster, Static Images API 지원)
+        return new Cesium.UrlTemplateImageryProvider({
+            url: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg90?access_token=${MAPBOX_TOKEN}`
+        });
+    }
+
+    if (viewer) {
+        viewer.imageryLayers.addImageryProvider(getBaseMapProvider());
+
+        viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(127, 26, 100000000),
+            orientation: {
+                heading: Cesium.Math.toRadians(CAMERA.orientation.heading),
+                pitch: Cesium.Math.toRadians(CAMERA.orientation.pitch),
+                roll: Cesium.Math.toRadians(CAMERA.orientation.roll)
+            }
+        });
+
+        viewer.scene.skyAtmosphere.show = false;
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+        viewer.scene.globe.enableLighting = true;
+    }
+
+    // UI 패널 토글
+    const sliderPanel = document.getElementById('slider-panel');
+    const toggleBtn = document.getElementById('toggle-panel-btn');
+    if (toggleBtn && sliderPanel) {
+        toggleBtn.addEventListener('click', () => {
+            sliderPanel.classList.toggle('collapsed');
+            toggleBtn.textContent = sliderPanel.classList.contains('collapsed') ? '▶' : '◀';
+        });
+    }
+
+    // 섹션 접기/펴기 (collapse/expand) — 디폴트: 접힘
+    document.querySelectorAll('.panel-section-header').forEach(header => {
+        header.addEventListener('click', (e) => {
+            // 체크박스/라디오/슬라이더 등 인터랙티브 요소 클릭 시 접기/펴기 방지
+            if (e.target.closest('input, select, button, a')) return;
+            const section = header.closest('.panel-section');
+            if (section) section.classList.toggle('open');
+        });
+    });
+
+    let windEngine = null;
+    let legendBox = null;
+    let gridVisualizer = null;
+    let currentDatasetKey = '3km';
+
+    // 바람장 레이어 (하층/중층/상층) 체크박스
+    const toggleLayerLow = document.getElementById('toggle-layer-low');
+    const toggleLayerMid = document.getElementById('toggle-layer-mid');
+    const toggleLayerHigh = document.getElementById('toggle-layer-high');
+
+    // 로딩 오버레이 표시/숨김 헬퍼
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    function showLoadingOverlay(label) {
+        if (loadingText && label) loadingText.textContent = label;
+        if (loadingOverlay) loadingOverlay.style.display = 'flex';
+    }
+    function hideLoadingOverlay() {
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
+    }
+
+    // 데이터셋 레지스트리: key → { json, bin, label, camera }
+    const DATASETS = {
+        '3km': {
+            json: '/temp_data/wind3d/metadata.json',
+            bin:  '/temp_data/wind3d/wind_data_3d.bin',
+            label: '3km 격자 (r030 동아시아)',
+            camera: {
+                destination: { lon: 128.666575, lat: 23.075479, height: 1618355 },
+                orientation: { heading: 357.6, pitch: -54.5, roll: 0 }
+            }
+        },
+        '8km': {
+            json: '/temp_data/wind3d/metadata_8km.json',
+            bin:  '/temp_data/wind3d/wind_data_3d_8km.bin',
+            label: '8km 격자 (g576 동아시아)',
+            camera: {
+                destination: { lon: 126.0, lat: 36.5, height: 15000000 },
+                orientation: { heading: 357.6, pitch: -90, roll: 0 }
+            }
+        }
+    };
+
+    // 데이터셋 캐시: key → { metadata, binaryData }
+    // 브라우저 리프레시 전까지 유지 — 3km → 8km → 3km 전환 시 재로딩 없이 재사용
+    const datasetCache = {};
+
+    // UI 범례를 동적으로 업데이트하는 헬퍼 함수
+    function updateHtmlLegendFromEngine(engineInstance) {
+        const gradientBar = document.getElementById('legend-gradient-bar');
+        const labelsContainer = document.getElementById('legend-labels-container');
+        if (!gradientBar || !labelsContainer) return;
+
+        try {
+            // 엔진 혹은 WindLegendBox 클래스에 정의된 정적/인스턴스 컬러맵 활용 (없을 시 기본 안전값 폴백)
+            let colorMap = window.WIND_COLOR_MAP || GpuParticleEngine.WIND_COLOR_MAP;
+            
+            // 만약 클래스나 인스턴스에 정적 속성으로 존재한다면 가져옴
+            if (!colorMap && engineInstance && engineInstance.colorMap) {
+                colorMap = engineInstance.colorMap;
+            }
+
+            if (colorMap && Array.isArray(colorMap) && colorMap.length > 0) {
+                // WIND_COLOR_MAP: [{speed: 0, color: [r,g,b]}, ...] — color 값은 0~255
+                const cssStops = colorMap.map((item, idx) => {
+                    let rgb;
+                    if (item.color && Array.isArray(item.color)) {
+                        rgb = `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`;
+                    } else if (Array.isArray(item)) {
+                        rgb = `rgb(${item[0]}, ${item[1]}, ${item[2]})`;
+                    } else if (typeof item === 'string') {
+                        rgb = item;
+                    } else {
+                        rgb = `rgb(0, 100, 255)`;
+                    }
+                    const percent = (idx / (colorMap.length - 1)) * 100;
+                    return `${rgb} ${percent}%`;
+                });
+
+                // 세로 범례: 하단(0) → 상단(max) 방향 그라디언트
+                gradientBar.style.background = `linear-gradient(to top, ${cssStops.join(', ')})`;
+
+                // 풍속 눈금: 세로 배치이므로 상단(최대) → 하단(0) 순으로 표시
+                labelsContainer.innerHTML = [...colorMap].reverse().map(item =>
+                    `<span>${item.speed}</span>`
+                ).join('');
+            }
+        } catch (e) {
+            console.warn("HTML 범례 동적 갱신 중 예외 발생 (기본값 유지):", e);
+        }
+    }
+
+    /**
+     * 화면 중앙 하단 정보 패널 갱신 — 선택된 데이터셋의 file_name / date_utc 표시
+     */
+    function updateDatasetInfoPanel(metadata) {
+        const fileNameEl = document.getElementById('dataset-file-name');
+        const dateUtcEl = document.getElementById('dataset-date-utc');
+        if (fileNameEl) fileNameEl.textContent = (metadata && metadata.file_name) || '-';
+        if (dateUtcEl) dateUtcEl.textContent = (metadata && metadata.date_utc) || '-';
+    }
+
+    /**
+     * 데이터셋 로드 — 기존 엔진/레전드 파기 후 신규 bin+json 로드 → 시각화
+     * (데이터셋 전환 시 호출, 최초 부팅 시 '8km' 로드)
+     */
+    async function loadDataset(key) {
+        if (!viewer) return;
+        const ds = DATASETS[key];
+        if (!ds) {
+            console.error("알 수 없는 데이터셋:", key);
+            return;
+        }
+
+        const statusEl = document.getElementById('dataset-status');
+        if (statusEl) statusEl.textContent = `${ds.label} 로딩 중...`;
+
+        // dimmed 오버레이 + 스피너 표시
+        showLoadingOverlay(`${ds.label} 로딩 중...`);
+
+        try {
+            // 1. 기존 엔진/레전드/격자 파기 (데이터셋 전환 시 프리미티브/DOM 정리)
+            if (windEngine) { windEngine.destroy(); windEngine = null; }
+            if (legendBox) { legendBox.destroy(); legendBox = null; }
+            if (gridVisualizer) { gridVisualizer.destroy(); gridVisualizer = null; }
+            window.particleEngine = null;
+            window.legendBoxInstance = null;
+            window.gridVisualizer = null;
+
+            // 2. 데이터 로드 (캐시 히트 시 fetch 스킵)
+            let metadata, binaryData;
+            if (datasetCache[key]) {
+                metadata = datasetCache[key].metadata;
+                binaryData = datasetCache[key].binaryData;
+            } else {
+                const [metaRes, binRes] = await Promise.all([
+                    fetch(ds.json),
+                    fetch(ds.bin)
+                ]);
+                metadata = (await metaRes.json()).metadata;
+                binaryData = await binRes.arrayBuffer();
+                datasetCache[key] = { metadata, binaryData };
+            }
+
+            // 화면 중앙 하단: 선택된 데이터셋 메타데이터(file_name, date_utc) 실시간 갱신
+            updateDatasetInfoPanel(metadata);
+
+            // Cesium 시계를 데이터셋의 date_utc에 동기화 — 태양 위치/하늘 색을 해당 시각으로 재현
+            if (metadata && metadata.date_utc) {
+                const date = Cesium.JulianDate.fromDate(new Date(metadata.date_utc));
+                viewer.clock.currentTime = date;
+                viewer.clock.shouldAnimate = false; // 시간 고정 (정지 프레임)
+            }
+
+            // 3. 8km 격자: 체크박스 상태 및 UI 숨김 (엔진 생성 전 적용)
+            const is8km = (key === '8km');
+            const boxFrameCb = document.getElementById('toggle-box-frame');
+            const allSlicesCb = document.getElementById('toggle-all-slices');
+            const toggleX = document.getElementById('toggle-x');
+            const toggleY = document.getElementById('toggle-y');
+            const toggleZ = document.getElementById('toggle-z');
+
+            if (boxFrameCb) boxFrameCb.checked = !is8km;
+            if (allSlicesCb) {
+                allSlicesCb.checked = !is8km;
+                allSlicesCb.disabled = is8km;
+            }
+            if (is8km) {
+                if (toggleX) toggleX.checked = false;
+                if (toggleY) toggleY.checked = false;
+                if (toggleZ) toggleZ.checked = false;
+            }
+
+            const sections = ['section-box-frame', 'section-slice-group'];
+            sections.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = is8km ? 'none' : '';
+            });
+
+            // 4. 신규 엔진/레전드 생성
+            windEngine = new GpuParticleEngine(viewer, metadata, binaryData);
+            window.particleEngine = windEngine;
+
+            windEngine.setSliceVisibility('x', toggleX ? toggleX.checked : false);
+            windEngine.setSliceVisibility('y', toggleY ? toggleY.checked : false);
+            windEngine.setSliceVisibility('z', toggleZ ? toggleZ.checked : false);
+
+            legendBox = new WindLegendBox(viewer, metadata);
+            legendBox.init();
+            window.legendBoxInstance = legendBox;
+
+            // 초기 체크박스 상태 동기화
+            applyLegendVisibility();
+
+            // 바람장 레이어 가시성 동기화
+            if (toggleLayerLow) windEngine.setLayerVisibility('low', toggleLayerLow.checked);
+            if (toggleLayerMid) windEngine.setLayerVisibility('mid', toggleLayerMid.checked);
+            if (toggleLayerHigh) windEngine.setLayerVisibility('high', toggleLayerHigh.checked);
+
+            // 고도 과장 배율 유지: 엔진 재생성 시 슬라이더 현재값 재적용
+            const hsSlider = document.getElementById('height-scale');
+            if (hsSlider) {
+                const hsVal = parseFloat(hsSlider.value);
+                windEngine.setHeightScale(hsVal);
+                if (legendBox) legendBox.updateHeightScale(hsVal);
+            }
+
+            // 5. 격자 시각화 생성 + UI 상태 동기화
+            gridVisualizer = new GridVisualizer(viewer, metadata);
+            window.gridVisualizer = gridVisualizer;
+            const gridModeRadio = document.querySelector('input[name="grid-mode"]:checked');
+            gridVisualizer.setMode(gridModeRadio ? gridModeRadio.value : 'ground');
+            gridVisualizer.updateHeightScale(hsSlider ? parseFloat(hsSlider.value) : 20);
+            const gridStepSlider = document.getElementById('grid-step-slider');
+            gridVisualizer.setStep(gridStepSlider ? parseInt(gridStepSlider.value, 10) : 1);
+            const gridToggle = document.getElementById('toggle-grid');
+            gridVisualizer.setShow(gridToggle ? gridToggle.checked : false);
+
+            // 풍속 필터 유지: 엔진 재생성 시 슬라이더 현재값 재적용
+            if (speedFilterMin && speedFilterMax) {
+                const sfMin = parseInt(speedFilterMin.value, 10);
+                const sfMax = parseInt(speedFilterMax.value, 10);
+                windEngine.setSpeedFilter(sfMin, sfMax);
+            }
+
+            // JS에서 정의된 컬러맵과 설정값으로 HTML 범례 스타일 및 눈금 자동 갱신
+            updateHtmlLegendFromEngine(windEngine);
+
+            // 데이터셋별 카메라 포지션 flyTo
+            if (ds.camera && viewer.camera) {
+                viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(
+                        ds.camera.destination.lon,
+                        ds.camera.destination.lat,
+                        ds.camera.destination.height
+                    ),
+                    orientation: {
+                        heading: Cesium.Math.toRadians(ds.camera.orientation.heading),
+                        pitch: Cesium.Math.toRadians(ds.camera.orientation.pitch),
+                        roll: Cesium.Math.toRadians(ds.camera.orientation.roll)
+                    },
+                    duration: 2
+                });
+            }
+
+            currentDatasetKey = key;
+            if (statusEl) {
+                statusEl.textContent = `${ds.label} (${metadata.iCount}×${metadata.jCount}×${metadata.levelCount})`;
+            }
+            // 엔진 생성은 동기 처리라 스피너 애니메이션이 멈출 수 있음 →
+            // 다음 프레임에서 오버레이를 숨겨 "뻑" 방지
+            requestAnimationFrame(() => requestAnimationFrame(hideLoadingOverlay));
+        } catch (err) {
+            console.error("바람 데이터 로드 실패:", err);
+            if (statusEl) statusEl.textContent = `로드 실패: ${err.message}`;
+            hideLoadingOverlay();
+        }
+    }
+
+    // postRender 리스너는 1회만 등록 (windEngine 변수 참조로 데이터셋 전환 자동 반영)
+    if (viewer) {
+        viewer.scene.postRender.addEventListener(() => {
+            if (windEngine && windEngine.isReady) {
+                windEngine.updateUniforms();
+            }
+        });
+    }
+
+    // 최초 부팅: 디폴트 데이터셋(8km) 로드
+    loadDataset('8km');
+
+    // 데이터셋 선택 드롭다운
+    const datasetSelect = document.getElementById('dataset-select');
+    if (datasetSelect) {
+        datasetSelect.addEventListener('change', (e) => {
+            loadDataset(e.target.value);
+        });
+    }
+
+    // Home 버튼 인터셉트: Cesium 기본 flyHome(지구 전체 뷰) 대신
+    // 현재 선택된 데이터셋의 디폴트 카메라로 이동
+    if (viewer) {
+        viewer.camera.flyHome = function () {
+            const ds = DATASETS[currentDatasetKey];
+            if (ds && ds.camera) {
+                this.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(
+                        ds.camera.destination.lon,
+                        ds.camera.destination.lat,
+                        ds.camera.destination.height
+                    ),
+                    orientation: {
+                        heading: Cesium.Math.toRadians(ds.camera.orientation.heading),
+                        pitch: Cesium.Math.toRadians(ds.camera.orientation.pitch),
+                        roll: Cesium.Math.toRadians(ds.camera.orientation.roll)
+                    },
+                    duration: 2
+                });
+            } else {
+                // 데이터셋 정보 부재 시 Cesium 기본 동작으로 폴백
+                Cesium.Camera.prototype.flyHome.call(this);
+            }
+        };
+    }
+
+    // 베이스맵 선택 드롭다운 — imagery layer 교체
+    const baseMapSelect = document.getElementById('base-map-select');
+    if (baseMapSelect && viewer) {
+        baseMapSelect.addEventListener('change', (e) => {
+            try {
+                const provider = getBaseMapProvider(e.target.value);
+                if (viewer.imageryLayers.length > 0) {
+                    viewer.imageryLayers.remove(viewer.imageryLayers.get(0), true);
+                }
+                viewer.imageryLayers.addImageryProvider(provider);
+            } catch (err) {
+                console.error("베이스맵 변경 실패:", err);
+            }
+        });
+    }
+
+    // 슬라이더 및 체크박스 제어 유틸 함수 (안전성 강화)
+    const sliderX = document.getElementById('slice-x');
+    const sliderY = document.getElementById('slice-y');
+    const sliderZ = document.getElementById('slice-z');
+    const heightScaleSlider = document.getElementById('height-scale');
+
+    const toggleX = document.getElementById('toggle-x');
+    const toggleY = document.getElementById('toggle-y');
+    const toggleZ = document.getElementById('toggle-z');
+    const toggleAllSlices = document.getElementById('toggle-all-slices');
+    
+    const toggleBoxFrame = document.getElementById('toggle-box-frame');
+    const toggleLegendText = document.getElementById('toggle-legend-text');
+
+    function updateEngineClip() {
+        if (!window.particleEngine) return;
+        
+        const xVal = sliderX ? parseFloat(sliderX.value) / 100.0 : 0;
+        const yVal = sliderY ? parseFloat(sliderY.value) / 100.0 : 0;
+        const zVal = sliderZ ? parseFloat(sliderZ.value) / 100.0 : 0;
+
+        if (sliderX) document.getElementById('x-val').innerText = sliderX.value;
+        if (sliderY) document.getElementById('y-val').innerText = sliderY.value;
+        if (sliderZ) document.getElementById('z-val').innerText = sliderZ.value;
+
+        window.particleEngine.setClipBox({
+            minX: 0.0, maxX: xVal,
+            minY: 0.0, maxY: yVal,
+            minZ: 0.0, maxZ: zVal
+        });
+    }
+
+    if (sliderX) sliderX.addEventListener('input', updateEngineClip);
+    if (sliderY) sliderY.addEventListener('input', updateEngineClip);
+    if (sliderZ) sliderZ.addEventListener('input', updateEngineClip);
+
+    if (toggleX) toggleX.addEventListener('change', (e) => {
+        if (window.particleEngine) window.particleEngine.setSliceVisibility('x', e.target.checked);
+    });
+    if (toggleY) toggleY.addEventListener('change', (e) => {
+        if (window.particleEngine) window.particleEngine.setSliceVisibility('y', e.target.checked);
+    });
+    if (toggleZ) toggleZ.addEventListener('change', (e) => {
+        if (window.particleEngine) window.particleEngine.setSliceVisibility('z', e.target.checked);
+    });
+
+    if (toggleAllSlices) toggleAllSlices.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        if (toggleX) toggleX.checked = isChecked;
+        if (toggleY) toggleY.checked = isChecked;
+        if (toggleZ) toggleZ.checked = isChecked;
+
+        if (window.particleEngine) {
+            window.particleEngine.setSliceVisibility('x', isChecked);
+            window.particleEngine.setSliceVisibility('y', isChecked);
+            window.particleEngine.setSliceVisibility('z', isChecked);
+        }
+    });
+
+    function applyLegendVisibility() {
+        if (!legendBox) return;
+        const showBox = toggleBoxFrame ? toggleBoxFrame.checked : true;
+        const showText = toggleLegendText ? toggleLegendText.checked : true;
+
+        legendBox.setBoxVisible(showBox);  
+        legendBox.setTextVisible(showText); 
+    }
+    if (toggleBoxFrame) toggleBoxFrame.addEventListener('change', applyLegendVisibility);
+    if (toggleLegendText) toggleLegendText.addEventListener('change', applyLegendVisibility);
+
+    // 고도 과장 배율 슬라이더
+    if (heightScaleSlider) {
+        heightScaleSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            const scaleValEl = document.getElementById('scale-val');
+            if (scaleValEl) scaleValEl.innerText = val;
+
+            if (window.particleEngine) {
+                window.particleEngine.setHeightScale(val);
+            }
+            if (legendBox) {
+                legendBox.updateHeightScale(val);
+            }
+            if (gridVisualizer) {
+                gridVisualizer.updateHeightScale(val);
+            }
+        });
+    }
+
+    // ==========================================
+    // 격자 시각화: 마스터 토글 + 모드(지면 단면 / 24레벨) 선택
+    // ==========================================
+    const gridToggle = document.getElementById('toggle-grid');
+    const gridModeRadios = document.querySelectorAll('input[name="grid-mode"]');
+
+    if (gridToggle) {
+        gridToggle.addEventListener('change', (e) => {
+            if (gridVisualizer) gridVisualizer.setShow(e.target.checked);
+        });
+    }
+    gridModeRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            if (!radio.checked || !gridVisualizer) return;
+            gridVisualizer.setMode(radio.value);
+        });
+    });
+
+    // 격자 묶음 (step) 슬라이더
+    const gridStepSlider = document.getElementById('grid-step-slider');
+    const gridStepVal = document.getElementById('grid-step-val');
+    if (gridStepSlider) {
+        gridStepSlider.addEventListener('input', (e) => {
+            const step = parseInt(e.target.value, 10);
+            if (gridStepVal) gridStepVal.innerText = step;
+            if (gridVisualizer) gridVisualizer.setStep(step);
+        });
+    }
+
+    // 바람장 레이어 (하층/중층/상층) 체크박스
+    function applyLayerVisibility() {
+        if (!window.particleEngine) return;
+        if (toggleLayerLow) window.particleEngine.setLayerVisibility('low', toggleLayerLow.checked);
+        if (toggleLayerMid) window.particleEngine.setLayerVisibility('mid', toggleLayerMid.checked);
+        if (toggleLayerHigh) window.particleEngine.setLayerVisibility('high', toggleLayerHigh.checked);
+    }
+    if (toggleLayerLow) toggleLayerLow.addEventListener('change', applyLayerVisibility);
+    if (toggleLayerMid) toggleLayerMid.addEventListener('change', applyLayerVisibility);
+    if (toggleLayerHigh) toggleLayerHigh.addEventListener('change', applyLayerVisibility);
+
+    // ==========================================
+    // 풍속 필터: 듀얼 슬라이더(min/max) + 풍속 등급 라디오
+    // - 라디오 선택 → 슬라이더가 해당 구간으로 자동 이동
+    // - 슬라이더 이동 → 라디오가 일치하는 구간으로 자동 선택 (없으면 해제)
+    // ==========================================
+    const SPEED_FILTER_MAX = 70; // WIND_COLOR_MAP 상한 (m/s)
+    const speedFilterMin = document.getElementById('speed-filter-min');
+    const speedFilterMax = document.getElementById('speed-filter-max');
+    const speedFilterTrack = document.getElementById('speed-filter-track');
+    const speedFilterLabel = document.getElementById('speed-filter-label');
+    const speedFilterRadios = document.querySelectorAll('input[name="speed-filter-preset"]');
+
+    // 풍속 등급 프리셋: 필터는 정확한 경계값 사용, 슬라이더는 step(5) 눈금에 스냅
+    const SPEED_PRESETS = {
+        all:    { min: 0,  max: 70,  label: '전체' },
+        light:  { min: 0,  max: 5,   label: '미풍' },
+        weak:   { min: 6,  max: 19,  label: '약풍' },
+        mod:    { min: 20, max: 39,  label: '중풍' },
+        strong: { min: 40, max: 69,  label: '강풍' },
+        storm:  { min: 70, max: 999, label: '폭풍' }
+    };
+    const snapToStep = (v) => Math.round(v / 5) * 5;
+
+    function applySpeedFilter(min, max) {
+        if (!window.particleEngine) return;
+        window.particleEngine.setSpeedFilter(min, max);
+    }
+
+    function updateSpeedFilterUI() {
+        const min = parseInt(speedFilterMin.value, 10);
+        const max = parseInt(speedFilterMax.value, 10);
+
+        // 트랙 하이라이트: [min, max] 구간만 강조
+        if (speedFilterTrack) {
+            const left = (min / SPEED_FILTER_MAX) * 100;
+            const right = (Math.min(max, SPEED_FILTER_MAX) / SPEED_FILTER_MAX) * 100;
+            speedFilterTrack.style.left = left + '%';
+            speedFilterTrack.style.width = Math.max(right - left, 0) + '%';
+        }
+        if (speedFilterLabel) {
+            speedFilterLabel.textContent = max >= SPEED_FILTER_MAX
+                ? `${min} ~ ${SPEED_FILTER_MAX}+ m/s`
+                : `${min} ~ ${max} m/s`;
+        }
+        applySpeedFilter(min, max);
+    }
+
+    // 슬라이더 값 → 일치하는 프리셋 라디오 자동 선택 (없으면 모두 해제)
+    function syncSpeedFilterRadio() {
+        const min = parseInt(speedFilterMin.value, 10);
+        const max = parseInt(speedFilterMax.value, 10);
+        let matched = null;
+        for (const key of Object.keys(SPEED_PRESETS)) {
+            const p = SPEED_PRESETS[key];
+            const pMin = snapToStep(p.min);
+            const pMax = p.max >= SPEED_FILTER_MAX ? SPEED_FILTER_MAX : snapToStep(p.max);
+            if (min === pMin && max === pMax) { matched = key; break; }
+        }
+        speedFilterRadios.forEach(r => { r.checked = (r.value === matched); });
+    }
+
+    // min/max 크로스 방지: min은 max 이하, max는 min 이상으로 클램프
+    function clampSpeedFilterSliders() {
+        let min = parseInt(speedFilterMin.value, 10);
+        let max = parseInt(speedFilterMax.value, 10);
+        if (min > max) {
+            if (document.activeElement === speedFilterMin) {
+                speedFilterMax.value = min; max = min;
+            } else {
+                speedFilterMin.value = max; min = max;
+            }
+        }
+        return { min, max };
+    }
+
+    if (speedFilterMin) {
+        speedFilterMin.addEventListener('input', () => {
+            clampSpeedFilterSliders();
+            updateSpeedFilterUI();
+            syncSpeedFilterRadio();
+        });
+    }
+    if (speedFilterMax) {
+        speedFilterMax.addEventListener('input', () => {
+            clampSpeedFilterSliders();
+            updateSpeedFilterUI();
+            syncSpeedFilterRadio();
+        });
+    }
+
+    // 라디오 선택 → 슬라이더 자동 이동 (필터는 정확한 경계값 적용)
+    speedFilterRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            if (!radio.checked) return;
+            const preset = SPEED_PRESETS[radio.value];
+            if (!preset) return;
+            speedFilterMin.value = snapToStep(preset.min);
+            speedFilterMax.value = Math.min(preset.max, SPEED_FILTER_MAX);
+            updateSpeedFilterUI();
+        });
+    });
+
+
+    // 환경 조명 체크박스: 하늘 대기 / 지구 조명 (디폴트 모두 해제)
+    const toggleSkyAtmosphere = document.getElementById('toggle-sky-atmosphere');
+    const toggleEnableLighting = document.getElementById('toggle-enable-lighting');
+
+    if (toggleSkyAtmosphere && viewer) {
+        toggleSkyAtmosphere.addEventListener('change', (e) => {
+            viewer.scene.skyAtmosphere.show = e.target.checked;
+        });
+    }
+    if (toggleEnableLighting && viewer) {
+        toggleEnableLighting.addEventListener('change', (e) => {
+            viewer.scene.globe.enableLighting = e.target.checked;
+        });
+    }
+</script>
+</body>
+</html>
