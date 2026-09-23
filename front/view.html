@@ -443,6 +443,39 @@
         </div>
     </div>
 
+    <!-- 바람 성분 필터 (u/v/w 토글 + w 증폭 게인) -->
+    <div class="panel-section" id="section-component-filter-wrap">
+        <div class="panel-section-header">
+            <span>바람 성분 필터</span>
+            <span class="section-arrow">▶</span>
+        </div>
+        <div class="panel-section-body">
+    <div class="control-group" id="section-component-filter">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="toggle-comp-u" checked style="cursor:pointer;">
+                <span>u — 동서바람 (Eastward)</span>
+            </label>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="toggle-comp-v" checked style="cursor:pointer;">
+                <span>v — 남북바람 (Northward)</span>
+            </label>
+            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="toggle-comp-w" checked style="cursor:pointer;">
+                <span>w — 연직바람 (Vertical)</span>
+            </label>
+        </div>
+        <div style="margin-top:8px; border-top:1px dashed #475569; padding-top:8px;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin-bottom:4px;">
+                <span>w 증폭 게인</span>
+                <span id="comp-w-gain-val" style="color:#38bdf8;">101</span>
+            </div>
+            <input type="range" id="comp-w-gain" min="1" max="1501" step="100" value="101" style="width:100%; cursor:pointer;">
+        </div>
+    </div>
+        </div>
+    </div>
+
     <!-- 바람장 파티클 풍속 필터 (듀얼 슬라이더 + 풍속 등급 라디오) -->
     <div class="panel-section" id="section-speed-filter-wrap">
         <div class="panel-section-header">
@@ -687,6 +720,13 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     const toggleLayerMid = document.getElementById('toggle-layer-mid');
     const toggleLayerHigh = document.getElementById('toggle-layer-high');
 
+    // 바람 성분 필터 (u/v/w) 체크박스 + w 증폭 게인 슬라이더
+    const toggleCompU = document.getElementById('toggle-comp-u');
+    const toggleCompV = document.getElementById('toggle-comp-v');
+    const toggleCompW = document.getElementById('toggle-comp-w');
+    const compWGainSlider = document.getElementById('comp-w-gain');
+    const compWGainVal = document.getElementById('comp-w-gain-val');
+
     // 로딩 오버레이 표시/숨김 헬퍼
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingText = document.getElementById('loading-text');
@@ -875,6 +915,12 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             if (toggleLayerLow) windEngine.setLayerVisibility('low', toggleLayerLow.checked);
             if (toggleLayerMid) windEngine.setLayerVisibility('mid', toggleLayerMid.checked);
             if (toggleLayerHigh) windEngine.setLayerVisibility('high', toggleLayerHigh.checked);
+
+            // 바람 성분 필터 동기화 (u/v/w 토글 + w 증폭 게인)
+            if (toggleCompU) windEngine.setComponentVisibility('u', toggleCompU.checked);
+            if (toggleCompV) windEngine.setComponentVisibility('v', toggleCompV.checked);
+            if (toggleCompW) windEngine.setComponentVisibility('w', toggleCompW.checked);
+            if (compWGainSlider) windEngine.setComponentGain('w', parseInt(compWGainSlider.value, 10));
 
             // 고도 과장 배율 유지: 엔진 재생성 시 슬라이더 현재값 재적용
             const hsSlider = document.getElementById('height-scale');
@@ -1126,6 +1172,24 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     if (toggleLayerLow) toggleLayerLow.addEventListener('change', applyLayerVisibility);
     if (toggleLayerMid) toggleLayerMid.addEventListener('change', applyLayerVisibility);
     if (toggleLayerHigh) toggleLayerHigh.addEventListener('change', applyLayerVisibility);
+
+    // 바람 성분 필터 (u/v/w) 체크박스 + w 증폭 게인 슬라이더
+    function applyComponentVisibility() {
+        if (!window.particleEngine) return;
+        if (toggleCompU) window.particleEngine.setComponentVisibility('u', toggleCompU.checked);
+        if (toggleCompV) window.particleEngine.setComponentVisibility('v', toggleCompV.checked);
+        if (toggleCompW) window.particleEngine.setComponentVisibility('w', toggleCompW.checked);
+    }
+    if (toggleCompU) toggleCompU.addEventListener('change', applyComponentVisibility);
+    if (toggleCompV) toggleCompV.addEventListener('change', applyComponentVisibility);
+    if (toggleCompW) toggleCompW.addEventListener('change', applyComponentVisibility);
+    if (compWGainSlider) {
+        compWGainSlider.addEventListener('input', (e) => {
+            const gain = parseInt(e.target.value, 10);
+            if (compWGainVal) compWGainVal.innerText = gain;
+            if (window.particleEngine) window.particleEngine.setComponentGain('w', gain);
+        });
+    }
 
     // ==========================================
     // 풍속 필터: 듀얼 슬라이더(min/max) + 풍속 등급 라디오

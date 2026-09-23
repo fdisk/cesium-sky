@@ -65,6 +65,10 @@ export class GpuParticleEngine {
             high: true
         };
 
+        // 바람 성분 필터: u(동서), v(남북), w(연직) 토글 + w 증폭 게인
+        this.componentVisibility = { u: true, v: true, w: true };
+        this.componentGain = { u: 1.0, v: 1.0, w: 10.0 };
+
         this.tailPrimitive = null; // 꼬리 선 프리미티브
         this.headPrimitive = null; // 머리 점 프리미티브
         this.slicePrimitives = []; 
@@ -164,6 +168,23 @@ export class GpuParticleEngine {
         }
     }
     /**
+     * 바람 성분 가시성 설정 — 'u'(동서) / 'v'(남북) / 'w'(연직)
+     * uniform만 갱신되어 파티클 재생성 없이 즉시 반영
+     */
+    setComponentVisibility(component, isVisible) {
+        if (this.componentVisibility.hasOwnProperty(component)) {
+            this.componentVisibility[component] = isVisible;
+        }
+    }
+    /**
+     * 바람 성분 증폭 게인 설정 (주로 w 연직바람 가시성 확보용)
+     */
+    setComponentGain(component, gain) {
+        if (this.componentGain.hasOwnProperty(component)) {
+            this.componentGain[component] = gain;
+        }
+    }
+    /**
      * 풍속 필터 설정 — [min, max] m/s 범위 밖 파티클/단면도 픽셀은 숨김
      * (단면도 텍스처는 CPU 생성이라 재빌드 필요)
      */
@@ -228,20 +249,24 @@ export class GpuParticleEngine {
         }
 
         const segs = GpuParticleEngine.CONFIG.TAIL_SEGMENTS;
-        const totalTailVertices = this.particleCount * segs * 2;
+        // 각 셀당 2개 파티클: A=전체(u,v,w), B=w 전용(0,0,w)
+        const totalParticles = this.particleCount * 2;
+        const totalTailVertices = totalParticles * segs * 2;
         
         const tailPositions = new Float64Array(totalTailVertices * 3);
-        const tailNormCoords = new Float32Array(totalTailVertices * 3); 
+        const tailNormCoords = new Float32Array(totalTailVertices * 3);
         const tailVelocities = new Float32Array(totalTailVertices * 3);
         const tailRandomTimes = new Float32Array(totalTailVertices);
         const tailSegmentRatios = new Float32Array(totalTailVertices);
+        const tailKinds = new Float32Array(totalTailVertices);
         const tailIndices = new Uint32Array(totalTailVertices);
 
-        const headPositions = new Float64Array(this.particleCount * 3);
-        const headNormCoords = new Float32Array(this.particleCount * 3);
-        const headVelocities = new Float32Array(this.particleCount * 3);
-        const headRandomTimes = new Float32Array(this.particleCount);
-        const headIndices = new Uint32Array(this.particleCount);
+        const headPositions = new Float64Array(totalParticles * 3);
+        const headNormCoords = new Float32Array(totalParticles * 3);
+        const headVelocities = new Float32Array(totalParticles * 3);
+        const headRandomTimes = new Float32Array(totalParticles);
+        const headKinds = new Float32Array(totalParticles);
+        const headIndices = new Uint32Array(totalParticles);
 
         const dataView = new Float32Array(this.binaryData);
         const centerLon = (this.lon1 + this.lon2) / 2.0;
@@ -265,35 +290,47 @@ export class GpuParticleEngine {
             const normZ = this.levelCount > 1 ? randK / (this.levelCount - 1) : 0;
             const randTime = Math.random() * 100.0;
 
-            headPositions[i * 3 + 0] = centerCartesian.x;
-            headPositions[i * 3 + 1] = centerCartesian.y;
-            headPositions[i * 3 + 2] = centerCartesian.z;
-            headNormCoords[i * 3 + 0] = normX;
-            headNormCoords[i * 3 + 1] = normY;
-            headNormCoords[i * 3 + 2] = normZ;
-            headVelocities[i * 3 + 0] = u;
-            headVelocities[i * 3 + 1] = v;
-            headVelocities[i * 3 + 2] = w;
-            headRandomTimes[i] = randTime;
-            headIndices[i] = i;
+            // 파티클 A: 전체 바람 (u, v, w) / 파티클 B: w 전용 (0, 0, w)
+            const particles = [
+                { idx: i * 2, vel: [u, v, w], kind: 0.0 },
+                { idx: i * 2 + 1, vel: [0.0, 0.0, w], kind: 1.0 }
+            ];
 
-            for (let s = 0; s < segs; s++) {
-                for (let p = 0; p < 2; p++) {
-                    const idx = (i * segs + s) * 2 + p;
-                    const ratio = (s + p) / segs;
+            for (const pt of particles) {
+                const idx = pt.idx;
 
-                    tailPositions[idx * 3 + 0] = centerCartesian.x;
-                    tailPositions[idx * 3 + 1] = centerCartesian.y;
-                    tailPositions[idx * 3 + 2] = centerCartesian.z;
-                    tailNormCoords[idx * 3 + 0] = normX;
-                    tailNormCoords[idx * 3 + 1] = normY;
-                    tailNormCoords[idx * 3 + 2] = normZ;
-                    tailVelocities[idx * 3 + 0] = u;
-                    tailVelocities[idx * 3 + 1] = v;
-                    tailVelocities[idx * 3 + 2] = w;
-                    tailRandomTimes[idx] = randTime;
-                    tailSegmentRatios[idx] = ratio;
-                    tailIndices[idx] = idx;
+                headPositions[idx * 3 + 0] = centerCartesian.x;
+                headPositions[idx * 3 + 1] = centerCartesian.y;
+                headPositions[idx * 3 + 2] = centerCartesian.z;
+                headNormCoords[idx * 3 + 0] = normX;
+                headNormCoords[idx * 3 + 1] = normY;
+                headNormCoords[idx * 3 + 2] = normZ;
+                headVelocities[idx * 3 + 0] = pt.vel[0];
+                headVelocities[idx * 3 + 1] = pt.vel[1];
+                headVelocities[idx * 3 + 2] = pt.vel[2];
+                headRandomTimes[idx] = randTime;
+                headKinds[idx] = pt.kind;
+                headIndices[idx] = idx;
+
+                for (let s = 0; s < segs; s++) {
+                    for (let p = 0; p < 2; p++) {
+                        const tIdx = (idx * segs + s) * 2 + p;
+                        const ratio = (s + p) / segs;
+
+                        tailPositions[tIdx * 3 + 0] = centerCartesian.x;
+                        tailPositions[tIdx * 3 + 1] = centerCartesian.y;
+                        tailPositions[tIdx * 3 + 2] = centerCartesian.z;
+                        tailNormCoords[tIdx * 3 + 0] = normX;
+                        tailNormCoords[tIdx * 3 + 1] = normY;
+                        tailNormCoords[tIdx * 3 + 2] = normZ;
+                        tailVelocities[tIdx * 3 + 0] = pt.vel[0];
+                        tailVelocities[tIdx * 3 + 1] = pt.vel[1];
+                        tailVelocities[tIdx * 3 + 2] = pt.vel[2];
+                        tailRandomTimes[tIdx] = randTime;
+                        tailSegmentRatios[tIdx] = ratio;
+                        tailKinds[tIdx] = pt.kind;
+                        tailIndices[tIdx] = tIdx;
+                    }
                 }
             }
         }
@@ -304,7 +341,8 @@ export class GpuParticleEngine {
                 normCoord: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 3, values: tailNormCoords }),
                 velocity: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 3, values: tailVelocities }),
                 randTime: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 1, values: tailRandomTimes }),
-                segmentRatio: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 1, values: tailSegmentRatios })
+                segmentRatio: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 1, values: tailSegmentRatios }),
+                kind: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 1, values: tailKinds })
             },
             indices: tailIndices,
             primitiveType: Cesium.PrimitiveType.LINES,
@@ -366,6 +404,7 @@ export class GpuParticleEngine {
             in vec3 velocity;
             in float randTime;
             in float segmentRatio;
+            in float kind;
 
             out vec4 v_color;
             uniform float u_time;
@@ -377,6 +416,8 @@ export class GpuParticleEngine {
             uniform vec3 u_layerMask;
             uniform vec2 u_layerBounds;
             uniform vec2 u_speedRange;
+            uniform vec3 u_componentMask;
+            uniform vec3 u_componentGain;
 
             ${dynamicShaderLib}
 
@@ -396,8 +437,30 @@ export class GpuParticleEngine {
                     return;
                 }
 
+                // 바람 성분 필터:
+                // - w 전용 파티클(kind=1): w만 체크(u,v off) 시에만 표시
+                // - 전체 파티클(kind=0): u 또는 v 체크 시에만 표시 (모두 off 시에는 표시 안 함)
+                float anyUV = max(u_componentMask.x, u_componentMask.y);
+                float wOnlyMode = u_componentMask.z * (1.0 - anyUV);
+                float compVisible = (kind > 0.5) ? wOnlyMode : anyUV;
+                if (compVisible < 0.5) {
+                    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+                    v_color = vec4(0.0, 0.0, 0.0, 0.0);
+                    return;
+                }
+
+                // 성분 필터: 체크된 성분(u/v/w)만 속도에 적용
+                vec3 vel = vec3(velocity.x * u_componentMask.x,
+                                velocity.y * u_componentMask.y,
+                                velocity.z * u_componentMask.z);
+                // w 전용 파티클(kind=1): w gain으로 수직 운동 증폭
+                if (kind > 0.5) {
+                    vel.z *= u_componentGain.z;
+                }
+
                 // 풍속 필터: [u_speedRange.x, u_speedRange.y] 범위 밖 파티클은 숨김
-                float speed = length(velocity);
+                // w 전용 파티클(kind=1)은 순수 |w| 기준으로 필터/색상 계산 (w gain 증폭 전 원본 속도 사용)
+                float speed = (kind > 0.5) ? abs(velocity.z) : length(vel);
                 if (speed < u_speedRange.x || speed > u_speedRange.y) {
                     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
@@ -406,8 +469,8 @@ export class GpuParticleEngine {
 
                 float baseProgress = fract(u_time * 0.1 * u_speedFactor + randTime);
                 float lifeProgress = max(0.0, baseProgress - segmentRatio * ${GpuParticleEngine.CONFIG.TAIL_LENGTH});
-                
-                vec3 currentPos = normCoord + velocity * (lifeProgress * 0.0005 * u_speedFactor);
+
+                vec3 currentPos = normCoord + vel * (lifeProgress * 0.0005 * u_speedFactor);
                 float lon = mix(u_lonRange.x, u_lonRange.y, currentPos.x);
                 float lat = mix(u_latRange.x, u_latRange.y, currentPos.y);
                 float gph = mix(u_gphRange.x, u_gphRange.y, currentPos.z);
@@ -444,7 +507,8 @@ export class GpuParticleEngine {
                 position: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.DOUBLE, componentsPerAttribute: 3, values: headPositions }),
                 normCoord: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 3, values: headNormCoords }),
                 velocity: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 3, values: headVelocities }),
-                randTime: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 1, values: headRandomTimes })
+                randTime: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 1, values: headRandomTimes }),
+                kind: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.FLOAT, componentsPerAttribute: 1, values: headKinds })
             },
             indices: headIndices,
             primitiveType: Cesium.PrimitiveType.POINTS,
@@ -456,6 +520,7 @@ export class GpuParticleEngine {
             in vec3 normCoord;
             in vec3 velocity;
             in float randTime;
+            in float kind;
 
             out vec4 v_color;
             uniform float u_time;
@@ -468,6 +533,8 @@ export class GpuParticleEngine {
             uniform vec3 u_layerMask;
             uniform vec2 u_layerBounds;
             uniform vec2 u_speedRange;
+            uniform vec3 u_componentMask;
+            uniform vec3 u_componentGain;
 
             ${dynamicShaderLib}
 
@@ -487,7 +554,30 @@ export class GpuParticleEngine {
                     return;
                 }
 
-                float speed = length(velocity);
+                // 바람 성분 필터:
+                // - w 전용 파티클(kind=1): w만 체크(u,v off) 시에만 표시
+                // - 전체 파티클(kind=0): u 또는 v 체크 시에만 표시 (모두 off 시에는 표시 안 함)
+                float anyUV = max(u_componentMask.x, u_componentMask.y);
+                float wOnlyMode = u_componentMask.z * (1.0 - anyUV);
+                float compVisible = (kind > 0.5) ? wOnlyMode : anyUV;
+                if (compVisible < 0.5) {
+                    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+                    v_color = vec4(0.0, 0.0, 0.0, 0.0);
+                    return;
+                }
+
+                // 성분 필터: 체크된 성분(u/v/w)만 속도에 적용
+                vec3 vel = vec3(velocity.x * u_componentMask.x,
+                                velocity.y * u_componentMask.y,
+                                velocity.z * u_componentMask.z);
+                // w 전용 파티클(kind=1): w gain으로 수직 운동 증폭
+                if (kind > 0.5) {
+                    vel.z *= u_componentGain.z;
+                }
+
+                // 풍속 필터: [u_speedRange.x, u_speedRange.y] 범위 밖 파티클은 숨김
+                // w 전용 파티클(kind=1)은 순수 |w| 기준으로 필터/색상 계산 (w gain 증폭 전 원본 속도 사용)
+                float speed = (kind > 0.5) ? abs(velocity.z) : length(vel);
                 if (speed < u_speedRange.x || speed > u_speedRange.y) {
                     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
@@ -495,8 +585,8 @@ export class GpuParticleEngine {
                 }
 
                 float baseProgress = fract(u_time * 0.1 * u_speedFactor + randTime);
-                
-                vec3 currentPos = normCoord + velocity * (baseProgress * 0.0005 * u_speedFactor);
+
+                vec3 currentPos = normCoord + vel * (baseProgress * 0.0005 * u_speedFactor);
                 float lon = mix(u_lonRange.x, u_lonRange.y, currentPos.x);
                 float lat = mix(u_latRange.x, u_latRange.y, currentPos.y);
                 float gph = mix(u_gphRange.x, u_gphRange.y, currentPos.z);
@@ -569,6 +659,20 @@ export class GpuParticleEngine {
                     },
                     u_speedRange: function() {
                         return new Cesium.Cartesian2(self.speedFilter.min, self.speedFilter.max);
+                    },
+                    u_componentMask: function() {
+                        return new Cesium.Cartesian3(
+                            self.componentVisibility.u ? 1.0 : 0.0,
+                            self.componentVisibility.v ? 1.0 : 0.0,
+                            self.componentVisibility.w ? 1.0 : 0.0
+                        );
+                    },
+                    u_componentGain: function() {
+                        return new Cesium.Cartesian3(
+                            self.componentGain.u,
+                            self.componentGain.v,
+                            self.componentGain.w
+                        );
                     }
                 };
 
@@ -601,8 +705,8 @@ export class GpuParticleEngine {
             };
         };
 
-        setupPrimitiveUpdate(this.tailPrimitive, tailGeometry, { position: 0, normCoord: 1, velocity: 2, randTime: 3, segmentRatio: 4 }, Cesium.PrimitiveType.LINES);
-        setupPrimitiveUpdate(this.headPrimitive, headGeometry, { position: 0, normCoord: 1, velocity: 2, randTime: 3 }, Cesium.PrimitiveType.POINTS);
+        setupPrimitiveUpdate(this.tailPrimitive, tailGeometry, { position: 0, normCoord: 1, velocity: 2, randTime: 3, segmentRatio: 4, kind: 5 }, Cesium.PrimitiveType.LINES);
+        setupPrimitiveUpdate(this.headPrimitive, headGeometry, { position: 0, normCoord: 1, velocity: 2, randTime: 3, kind: 4 }, Cesium.PrimitiveType.POINTS);
 
         this.viewer.scene.primitives.add(this.tailPrimitive);
         this.viewer.scene.primitives.add(this.headPrimitive);
