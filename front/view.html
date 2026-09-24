@@ -991,6 +991,33 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         if (loadingOverlay) loadingOverlay.style.display = 'none';
     }
 
+    /**
+     * 스트리밍 fetch — Content-Length 기준 progress %를 onProgress(pct)로 콜백
+     * (Content-Length 부재/chunked 전송 시 progress 없이 전체 arrayBuffer 반환)
+     */
+    async function fetchWithProgress(url, onProgress) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
+        const total = parseInt(res.headers.get('Content-Length'), 10);
+        if (!res.body || !Number.isFinite(total) || total <= 0) {
+            return await res.arrayBuffer();
+        }
+        const reader = res.body.getReader();
+        const chunks = [];
+        let loaded = 0;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            loaded += value.byteLength;
+            if (onProgress) onProgress(Math.min(100, Math.floor((loaded / total) * 100)));
+        }
+        const buffer = new Uint8Array(loaded);
+        let offset = 0;
+        for (const c of chunks) { buffer.set(c, offset); offset += c.byteLength; }
+        return buffer.buffer;
+    }
+
     const DATASETS = {
         '3km': {
             json: '/temp_data/wind3d/metadata.json',
@@ -1096,14 +1123,17 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 metadata = datasetCache[key].metadata;
                 binaryData = datasetCache[key].binaryData;
             } else {
-                const [metaRes, binRes] = await Promise.all([
-                    fetch(ds.json),
-                    fetch(ds.bin)
-                ]);
-                metadata = (await metaRes.json()).metadata;
-                binaryData = await binRes.arrayBuffer();
+                // progress % 표시: bin 다운로드 스트리밍 (json은 병렬로 별도 fetch)
+                const baseLabel = `${ds.label} 로딩 중`;
+                const metaPromise = fetch(ds.json).then(r => r.json()).then(j => j.metadata);
+                binaryData = await fetchWithProgress(ds.bin, (pct) => {
+                    if (loadingText) loadingText.textContent = `${baseLabel} ${pct}%`;
+                });
+                metadata = await metaPromise;
                 datasetCache[key] = { metadata, binaryData };
             }
+            // 다운로드 완료 → 동기 처리(엔진 생성) 구간으로 라벨 전환
+            if (loadingText) loadingText.textContent = `${ds.label} 데이터 처리 중...`;
 
             updateDatasetInfoPanel(metadata);
 
