@@ -4,32 +4,52 @@ export class GpuParticleEngine {
     // ==========================================
     static CONFIG = {
         DEFAULT_SPEED_FACTOR: 5.0,     // 기본 속도 배율
-        DEFAULT_HEIGHT_SCALE: 20.0,    // 높이 스케일 배율
-        PARTICLE_POINT_SIZE: 2.0,     // [머리 크기] 원하는 만큼 큼직하게 조절 가능!
-        TAIL_LENGTH: 0.2,              // 꼬리 길이
+        DEFAULT_HEIGHT_SCALE: 30.0,    // 높이 스케일 배율
+        PARTICLE_POINT_SIZE: 1.5,     // [머리 크기] 원하는 만큼 큼직하게 조절 가능!
+        TAIL_LENGTH: 0.5,              // 꼬리 길이
         SHOW_LIMIT_SPEED: 1.0,        // 투명 처리할 최소 풍속 기준
-        TAIL_SEGMENTS: 8              // [핵심] 꼬리를 구성하는 선 조각 수 (촘촘할수록 매끄러운 선이 됨)
+        TAIL_SEGMENTS: 8,             // [핵심] 꼬리를 구성하는 선 조각 수 (촘촘할수록 매끄러운 선이 됨)
+        SPIRAL_ON: false,             // 나선 표현 on/off
+        SPIRAL_THRESHOLD: 20.0,       // 나선 시작 풍속 (m/s)
+        SPIRAL_RADIUS_KM: 10.0,       // 나선 반경 (km) — 파티클 이동거리(~수백 km) 대비 충분히 커야 원형 나선으로 보임
+        SPIRAL_TURNS: 0.5             // 파티클 수명당 회전 수
     };
-    static WIND_COLOR_MAP = [
-        { speed: 0.0,  color: [240, 240, 240] }, // 연한 회색 (고요)
-        { speed: 5.0,  color: [0, 255, 255] },   // 시안 (약한 바람)
-        { speed: 12.0, color: [0, 0, 255] },     // 파랑
-        { speed: 20.0, color: [0, 255, 0] },     // 초록
-        { speed: 40.0, color: [128, 255, 0] },  // 연두색
-        { speed: 50.0, color: [255, 255, 0] },   // 노랑
-        { speed: 60.0, color: [255, 128, 0] },   // 주황
-        { speed: 70.0, color: [255, 0, 0] }      // 빨강 (요청하신 맥스 부근: 기존 125 수준의 강렬한 레드)
-    ];
     // static WIND_COLOR_MAP = [
-    //     { speed: 0.0,   color: [240, 240, 240] },
-    //     { speed: 0.9,   color: [230, 230, 230] },
-    //     { speed: 25.0,  color: [0, 255, 255] },   
-    //     { speed: 50.0,  color: [0, 0, 255] },     
-    //     { speed: 75.0,  color: [0, 255, 0] },     
-    //     { speed: 100.0, color: [255, 255, 0] },   
-    //     { speed: 125.0, color: [255, 128, 0] },   
-    //     { speed: 150.0, color: [255, 0, 0] }      
-    // ];    
+    //     { speed: 0.0,  color: [240, 240, 240] }, // 연한 회색 (고요)
+    //     { speed: 5.0,  color: [0, 255, 255] },   // 시안 (약한 바람)
+    //     { speed: 12.0, color: [0, 0, 255] },     // 파랑
+    //     { speed: 20.0, color: [0, 255, 0] },     // 초록
+    //     { speed: 40.0, color: [128, 255, 0] },  // 연두색
+    //     { speed: 50.0, color: [255, 255, 0] },   // 노랑
+    //     { speed: 60.0, color: [255, 128, 0] },   // 주황
+    //     { speed: 70.0, color: [255, 0, 0] }      // 빨강 (요청하신 맥스 부근: 기존 125 수준의 강렬한 레드)
+    // ];
+    static WIND_COLOR_MAP = [
+        { speed: 0.0,   color: [255, 255, 255] }, //   0.0 knot : 흰색 (0 표기)
+        { speed: 5.0,   color: [198, 241, 254] }, //   5.0 knot : 아주 연한 하늘색
+        { speed: 10.0,  color: [148, 226, 254] }, //  10.0 knot : 연한 하늘색
+        { speed: 15.0,  color: [92, 212, 255]  }, //  15.0 knot : 파란빛 하늘색
+        { speed: 20.0,  color: [40, 198, 255]  }, //  20.0 knot : 밝은 파란색
+        { speed: 25.0,  color: [3, 185, 255]   }, //  25.0 knot : 선명한 파란색 (25 표기)
+        { speed: 30.0,  color: [0, 146, 248]   }, //  30.0 knot : 짙은 파란색
+        { speed: 35.0,  color: [4, 57, 247]    }, //  35.0 knot : 보라빛 진파랑
+        { speed: 40.0,  color: [4, 210, 20]    }, //  40.0 knot : 형광 연두색
+        { speed: 45.0,  color: [0, 161, 0]     }, //  45.0 knot : 밝은 초록색
+        { speed: 50.0,  color: [0, 121, 0]     }, //  50.0 knot : 중간 초록색 (50 표기)
+        { speed: 55.0,  color: [0, 79, 0]      }, //  55.0 knot : 짙은 녹색 / 쑥색
+        { speed: 60.0,  color: [189, 206, 78]  }, //  60.0 knot : 올리브 / 연두 노랑
+        { speed: 65.0,  color: [255, 213, 10]  }, //  65.0 knot : 밝은 노란색
+        { speed: 70.0,  color: [246, 193, 6]   }, //  70.0 knot : 짙은 노란색
+        { speed: 75.0,  color: [231, 178, 8]   }, //  75.0 knot : 귤색 / 황토색 (75 표기)
+        { speed: 80.0,  color: [212, 161, 3]   }, //  80.0 knot : 주황 노란색
+        { speed: 85.0,  color: [253, 111, 6]   }, //  85.0 knot : 주황색
+        { speed: 90.0,  color: [255, 67, 0]    }, //  90.0 knot : 주황 빨강
+        { speed: 95.0,  color: [226, 22, 4]    }, //  95.0 knot : 선명한 빨간색
+        { speed: 100.0, color: [192, 18, 0]    }, // 100.0 knot : 짙은 빨간색 / 적갈색 (100 표기)
+        { speed: 115.0, color: [120, 20, 10]   }, // 115.0 knot : 아주 어두운 와인색
+        { speed: 130.0, color: [50, 53, 52]    }, // 130.0 knot : 짙은 쥐색
+        { speed: 150.0, color: [52, 52, 52]    }  // 150.0 knot : 어두운 회색 (150 표기 이상)
+    ];
     
     constructor(viewer, metadata, binaryData, particleCount = 20000) {
         this.viewer = viewer;
@@ -41,6 +61,12 @@ export class GpuParticleEngine {
         this.heightScale = GpuParticleEngine.CONFIG.DEFAULT_HEIGHT_SCALE;
         this.pointSize = GpuParticleEngine.CONFIG.PARTICLE_POINT_SIZE;
         this.showLimitSpeed = GpuParticleEngine.CONFIG.SHOW_LIMIT_SPEED;
+
+        // 나선(사이클론) 표현: 특정 풍속 이상 파티클이 진행 방향을 축으로 나선 궤적을 그리도록
+        this.spiralOn = GpuParticleEngine.CONFIG.SPIRAL_ON;
+        this.spiralThreshold = GpuParticleEngine.CONFIG.SPIRAL_THRESHOLD;   // m/s
+        this.spiralRadiusKm = GpuParticleEngine.CONFIG.SPIRAL_RADIUS_KM;   // km
+        this.spiralTurns = GpuParticleEngine.CONFIG.SPIRAL_TURNS;          // 회전 수 / 파티클 수명
 
         // 풍속 필터 (파티클/단면도 공통): [min, max] 범위 밖 파티클은 숨김
         this.speedFilter = { min: 0.0, max: Infinity };
@@ -191,6 +217,19 @@ export class GpuParticleEngine {
     setSpeedFilter(min, max) {
         this.speedFilter = { min: min, max: max };
         this.updateSlicePlanes();
+    }
+    /**
+     * 나선(사이클론) 표현 설정 — uniform만 갱신되어 파티클 재생성 없이 즉시 반영
+     * @param {boolean} on        나선 효과 on/off
+     * @param {number}  threshold 나선 시작 풍속 (m/s)
+     * @param {number}  radiusKm  나선 반경 (km)
+     * @param {number}  turns     파티클 수명당 회전 수
+     */
+    setSpiral(on, threshold, radiusKm, turns) {
+        if (on !== undefined) this.spiralOn = !!on;
+        if (threshold !== undefined) this.spiralThreshold = threshold;
+        if (radiusKm !== undefined) this.spiralRadiusKm = radiusKm;
+        if (turns !== undefined) this.spiralTurns = turns;
     }
     setLegendVisibility(showBox, showPressureLabels) {
         if (this.legendContainer) this.legendContainer.style.display = showBox ? 'block' : 'none';
@@ -418,9 +457,13 @@ export class GpuParticleEngine {
             uniform vec2 u_speedRange;
             uniform vec3 u_componentMask;
             uniform vec3 u_componentGain;
-
+            uniform float u_spiralOn;
+            uniform float u_spiralThreshold;
+            uniform float u_spiralRadius;
+            uniform float u_spiralTurns;
+ 
             ${dynamicShaderLib}
-
+ 
             void main() {
                 // Layer visibility filter (based on starting level)
                 float layerMask = 0.0;
@@ -436,7 +479,7 @@ export class GpuParticleEngine {
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
                     return;
                 }
-
+ 
                 // 바람 성분 필터:
                 // - w 전용 파티클(kind=1): w만 체크(u,v off) 시에만 표시
                 // - 전체 파티클(kind=0): u 또는 v 체크 시에만 표시 (모두 off 시에는 표시 안 함)
@@ -448,7 +491,7 @@ export class GpuParticleEngine {
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
                     return;
                 }
-
+ 
                 // 성분 필터: 체크된 성분(u/v/w)만 속도에 적용
                 vec3 vel = vec3(velocity.x * u_componentMask.x,
                                 velocity.y * u_componentMask.y,
@@ -457,7 +500,7 @@ export class GpuParticleEngine {
                 if (kind > 0.5) {
                     vel.z *= u_componentGain.z;
                 }
-
+ 
                 // 풍속 필터: [u_speedRange.x, u_speedRange.y] 범위 밖 파티클은 숨김
                 // w 전용 파티클(kind=1)은 순수 |w| 기준으로 필터/색상 계산 (w gain 증폭 전 원본 속도 사용)
                 float speed = (kind > 0.5) ? abs(velocity.z) : length(vel);
@@ -466,18 +509,32 @@ export class GpuParticleEngine {
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
                     return;
                 }
-
+ 
                 float baseProgress = fract(u_time * 0.1 * u_speedFactor + randTime);
                 float lifeProgress = max(0.0, baseProgress - segmentRatio * ${GpuParticleEngine.CONFIG.TAIL_LENGTH});
-
+ 
                 vec3 currentPos = normCoord + vel * (lifeProgress * 0.0005 * u_speedFactor);
+ 
+                // 나선(사이클론) offset: 특정 풍속 이상 전체 파티클(kind=0)만 적용
+                if (u_spiralOn > 0.5 && kind < 0.5) {
+                    float spiralAmt = smoothstep(u_spiralThreshold, u_spiralThreshold + 10.0, speed);
+                    if (spiralAmt > 0.001) {
+                        vec3 dir = normalize(vel + vec3(1e-6));
+                        vec3 ref = abs(dir.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+                        vec3 side1 = normalize(cross(dir, ref));
+                        vec3 side2 = cross(dir, side1);
+                        float phase = lifeProgress * u_spiralTurns * 6.2831853;
+                        currentPos += (side1 * cos(phase) + side2 * sin(phase)) * (u_spiralRadius * spiralAmt);
+                    }
+                }
+ 
                 float lon = mix(u_lonRange.x, u_lonRange.y, currentPos.x);
                 float lat = mix(u_latRange.x, u_latRange.y, currentPos.y);
                 float gph = mix(u_gphRange.x, u_gphRange.y, currentPos.z);
-
+ 
                 vec3 cartesianPos = geodeticToCartesian(vec3(lon, lat, gph * u_heightScale));
                 gl_Position = czm_modelViewProjection * vec4(cartesianPos, 1.0);
-
+ 
                 vec3 color = getShaderColor(speed);
                 float alpha = (1.0 - segmentRatio) * smoothstep(0.0, 0.1, baseProgress) * (1.0 - smoothstep(0.9, 1.0, baseProgress));
                 v_color = vec4(color, clamp(alpha * 0.8, 0.0, 1.0));
@@ -535,9 +592,13 @@ export class GpuParticleEngine {
             uniform vec2 u_speedRange;
             uniform vec3 u_componentMask;
             uniform vec3 u_componentGain;
-
+            uniform float u_spiralOn;
+            uniform float u_spiralThreshold;
+            uniform float u_spiralRadius;
+            uniform float u_spiralTurns;
+ 
             ${dynamicShaderLib}
-
+ 
             void main() {
                 // Layer visibility filter (based on starting level)
                 float layerMask = 0.0;
@@ -553,7 +614,7 @@ export class GpuParticleEngine {
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
                     return;
                 }
-
+ 
                 // 바람 성분 필터:
                 // - w 전용 파티클(kind=1): w만 체크(u,v off) 시에만 표시
                 // - 전체 파티클(kind=0): u 또는 v 체크 시에만 표시 (모두 off 시에는 표시 안 함)
@@ -565,7 +626,7 @@ export class GpuParticleEngine {
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
                     return;
                 }
-
+ 
                 // 성분 필터: 체크된 성분(u/v/w)만 속도에 적용
                 vec3 vel = vec3(velocity.x * u_componentMask.x,
                                 velocity.y * u_componentMask.y,
@@ -574,7 +635,7 @@ export class GpuParticleEngine {
                 if (kind > 0.5) {
                     vel.z *= u_componentGain.z;
                 }
-
+ 
                 // 풍속 필터: [u_speedRange.x, u_speedRange.y] 범위 밖 파티클은 숨김
                 // w 전용 파티클(kind=1)은 순수 |w| 기준으로 필터/색상 계산 (w gain 증폭 전 원본 속도 사용)
                 float speed = (kind > 0.5) ? abs(velocity.z) : length(vel);
@@ -583,19 +644,33 @@ export class GpuParticleEngine {
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
                     return;
                 }
-
+ 
                 float baseProgress = fract(u_time * 0.1 * u_speedFactor + randTime);
-
+ 
                 vec3 currentPos = normCoord + vel * (baseProgress * 0.0005 * u_speedFactor);
+ 
+                // 나선(사이클론) offset: 특정 풍속 이상 전체 파티클(kind=0)만 적용
+                if (u_spiralOn > 0.5 && kind < 0.5) {
+                    float spiralAmt = smoothstep(u_spiralThreshold, u_spiralThreshold + 10.0, speed);
+                    if (spiralAmt > 0.001) {
+                        vec3 dir = normalize(vel + vec3(1e-6));
+                        vec3 ref = abs(dir.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+                        vec3 side1 = normalize(cross(dir, ref));
+                        vec3 side2 = cross(dir, side1);
+                        float phase = baseProgress * u_spiralTurns * 6.2831853;
+                        currentPos += (side1 * cos(phase) + side2 * sin(phase)) * (u_spiralRadius * spiralAmt);
+                    }
+                }
+ 
                 float lon = mix(u_lonRange.x, u_lonRange.y, currentPos.x);
                 float lat = mix(u_latRange.x, u_latRange.y, currentPos.y);
                 float gph = mix(u_gphRange.x, u_gphRange.y, currentPos.z);
-
+ 
                 vec3 cartesianPos = geodeticToCartesian(vec3(lon, lat, gph * u_heightScale));
                 gl_Position = czm_modelViewProjection * vec4(cartesianPos, 1.0);
-
+ 
                 gl_PointSize = u_pointSize;
-
+ 
                 vec3 color = getShaderColor(speed);
                 float alpha = smoothstep(0.0, 0.1, baseProgress) * (1.0 - smoothstep(0.9, 1.0, baseProgress));
                 v_color = vec4(color, clamp(alpha * 1.5, 0.0, 1.0));
@@ -673,6 +748,21 @@ export class GpuParticleEngine {
                             self.componentGain.v,
                             self.componentGain.w
                         );
+                    },
+                    u_spiralOn: function() {
+                        return self.spiralOn ? 1.0 : 0.0;
+                    },
+                    u_spiralThreshold: function() {
+                        return self.spiralThreshold;
+                    },
+                    u_spiralRadius: function() {
+                        // km → normalized space: domain width ≈ lonRange * 111 * cos(midLat)
+                        const midLat = (self.lat1 + self.lat2) / 2.0;
+                        const domainKm = (self.lon2 - self.lon1) * 111.0 * Math.cos(midLat * Math.PI / 180.0);
+                        return domainKm > 0 ? self.spiralRadiusKm / domainKm : 0.0;
+                    },
+                    u_spiralTurns: function() {
+                        return self.spiralTurns;
                     }
                 };
 

@@ -175,12 +175,12 @@
     .wind-legend-container, div[style*="position: absolute"][style*="bottom: 20px; right: 20px;"] {
         display: none !important;
     }
-
+ 
     /* 우측 상단: 풍속 (m/s) 세로 범례 패널 */
     #wind-legend-panel {
         position: absolute;
-        top: 140px;
-        right: 4px;
+        top: 48px;
+        right: 8px;
         z-index: 999;
         background: rgba(15, 23, 42, 0.9);
         padding: 10px 12px;
@@ -201,8 +201,8 @@
     }
     #legend-gradient-bar {
         width: 10px;
-        height: 160px;
-        border-radius: 3px;
+        height: 320px;
+        border-radius: 2px;
         background: linear-gradient(to top, rgb(0,76,230), rgb(0,204,230), rgb(25,204,50), rgb(230,230,0), rgb(230,25,25));
     }
     #legend-labels-container {
@@ -338,9 +338,9 @@
     <!-- 고도 과장 배율 (접기/펴기 없음) -->
     <div id="section-height-scale-wrap" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
         <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">
-            고도 과장 배율: <span id="scale-val">20</span>x
+            고도 과장 배율: <span id="scale-val">30</span>x
         </div>
-        <input type="range" id="height-scale" min="10" max="70" step="1" value="20" style="width:100%;">
+        <input type="range" id="height-scale" min="10" max="70" step="1" value="30" style="width:100%;">
         <div id="hs-labels" style="display:flex; justify-content:space-between; padding-top:2px;">
             <span style="font-size:9px; color:#94a3b8;">1</span>
             <span style="font-size:9px; color:#94a3b8;">2</span>
@@ -385,7 +385,7 @@
             <span>격자 시각화</span>
             <span style="display:flex; align-items:center; gap:8px;">
                 <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px; font-weight:normal;">
-                    <input type="checkbox" id="toggle-grid" style="cursor:pointer;"> 표시
+                    <input type="checkbox" id="toggle-grid" style="cursor:pointer;" checked> 표시
                 </label>
                 <span class="section-arrow">▶</span>
             </span>
@@ -394,23 +394,23 @@
     <div class="control-group" id="section-grid">
             <div style="display:flex; flex-direction:column; gap:3px;">
                 <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                    <input type="radio" name="grid-mode" value="ground" checked style="cursor:pointer;">
+                    <input type="radio" name="grid-mode" value="ground" style="cursor:pointer;">
                     <span>지면 단면 격자</span>
                 </label>
                 <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                    <input type="radio" name="grid-mode" value="levels" style="cursor:pointer;">
+                    <input type="radio" name="grid-mode" value="levels" checked style="cursor:pointer;">
                     <span>24레벨 격자 (직육면체)</span>
                 </label>
             </div>
             <div style="margin-top:6px;">
                 <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1;">
                     <span>격자 묶음 (step)</span>
-                    <span id="grid-step-val" style="color:#f8fafc;">50</span>
+                    <span id="grid-step-val" style="color:#f8fafc;">1200</span>
                 </div>
-                <input type="range" id="grid-step-slider" min="1" max="50" step="1" value="50"
+                <input type="range" id="grid-step-slider" min="1" max="1200" step="1" value="1200"
                     style="width:100%; cursor:pointer;">
                 <div style="display:flex; justify-content:space-between; font-size:9px; color:#64748b; padding-top:2px;">
-                    <span>1</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span>
+                    <span>1</span><span>230</span><span>530</span><span>850</span><span>1200</span>
                 </div>
             </div>
     </div>
@@ -519,6 +519,39 @@
                 <input type="radio" name="speed-filter-preset" value="storm" style="cursor:pointer;">
                 <span>폭풍 (70 m/s 이상)</span>
             </label>
+        </div>
+    </div>
+        </div>
+    </div>
+
+    <!-- 나선(사이클론) 표현 -->
+    <div class="panel-section" id="section-spiral-wrap">
+        <div class="panel-section-header">
+            <span>나선 강조 (Cyclone)</span>
+            <span class="section-arrow">▶</span>
+        </div>
+        <div class="panel-section-body">
+    <div class="control-group" id="section-spiral">
+        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="toggle-spiral" style="cursor:pointer;">
+            <span>나선 효과 사용</span>
+        </label>
+        <div id="spiral-options" style="margin-top:8px; border-top:1px dashed #475569; padding-top:8px; opacity:0.4; pointer-events:none;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin-bottom:4px;">
+                <span>시작 풍속</span>
+                <span id="spiral-threshold-val" style="color:#38bdf8;">20 m/s</span>
+            </div>
+            <input type="range" id="spiral-threshold" min="10" max="60" step="5" value="20" style="width:100%; cursor:pointer;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin:8px 0 4px 0;">
+                <span>반경</span>
+                <span id="spiral-radius-val" style="color:#38bdf8;">10 km</span>
+            </div>
+            <input type="range" id="spiral-radius" min="10" max="500" step="10" value="10" style="width:100%; cursor:pointer;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin:8px 0 4px 0;">
+                <span>회전 수</span>
+                <span id="spiral-turns-val" style="color:#38bdf8;">0.5</span>
+            </div>
+            <input type="range" id="spiral-turns" min="0.1" max="6" step="0.1" value="0.5" style="width:100%; cursor:pointer;">
         </div>
     </div>
         </div>
@@ -745,8 +778,8 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             bin:  '/temp_data/wind3d/wind_data_3d.bin',
             label: '3km 격자 (r030 동아시아)',
             camera: {
-                destination: { lon: 128.666575, lat: 23.075479, height: 1618355 },
-                orientation: { heading: 357.6, pitch: -54.5, roll: 0 }
+                destination: { lon: 126.666575, lat: 37.075479, height: 2418355 },
+                orientation: { heading: 0, pitch: -90, roll: 0 }
             }
         },
         '8km': {
@@ -771,17 +804,17 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         if (!gradientBar || !labelsContainer) return;
 
         try {
-            // 엔진 혹은 WindLegendBox 클래스에 정의된 정적/인스턴스 컬러맵 활용 (없을 시 기본 안전값 폴백)
             let colorMap = window.WIND_COLOR_MAP || GpuParticleEngine.WIND_COLOR_MAP;
-            
-            // 만약 클래스나 인스턴스에 정적 속성으로 존재한다면 가져옴
             if (!colorMap && engineInstance && engineInstance.colorMap) {
                 colorMap = engineInstance.colorMap;
             }
 
             if (colorMap && Array.isArray(colorMap) && colorMap.length > 0) {
-                // WIND_COLOR_MAP: [{speed: 0, color: [r,g,b]}, ...] — color 값은 0~255
-                const cssStops = colorMap.map((item, idx) => {
+                const count = colorMap.length;
+                const cssStops = [];
+
+                // 깍두기(계단형) 블록을 만들기 위해 각 구간의 시작(start)과 끝(end)에 같은 색상을 부여
+                colorMap.forEach((item, idx) => {
                     let rgb;
                     if (item.color && Array.isArray(item.color)) {
                         rgb = `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`;
@@ -792,23 +825,37 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                     } else {
                         rgb = `rgb(0, 100, 255)`;
                     }
-                    const percent = (idx / (colorMap.length - 1)) * 100;
-                    return `${rgb} ${percent}%`;
+
+                    // 각 블록의 시작 백분율과 끝 백분율 계산
+                    const startPercent = (idx / count) * 100;
+                    const endPercent = ((idx + 1) / count) * 100;
+
+                    // 같은 색상으로 시작과 끝 지점을 2번 넣어 경계선을 명확하게 표현
+                    cssStops.push(`${rgb} ${startPercent}%`);
+                    cssStops.push(`${rgb} ${endPercent}%`);
                 });
 
-                // 세로 범례: 하단(0) → 상단(max) 방향 그라디언트
+                // 세로 범례: 하단(0) → 상단(max) 방향 단색 계단형 그라디언트
                 gradientBar.style.background = `linear-gradient(to top, ${cssStops.join(', ')})`;
 
-                // 풍속 눈금: 세로 배치이므로 상단(최대) → 하단(0) 순으로 표시
-                labelsContainer.innerHTML = [...colorMap].reverse().map(item =>
-                    `<span>${item.speed}</span>`
-                ).join('');
+                // 풍속 눈금 텍스트 표시
+                labelsContainer.innerHTML = [...colorMap].reverse().map(item => {
+                    const speed = item.speed;
+                    let displayValue = '';
+
+                    if (speed < 100) {
+                        if (speed % 25 === 0) displayValue = speed;
+                    } else {
+                        displayValue = speed;
+                    }
+
+                    return `<span>${displayValue}</span>`;
+                }).join('');
             }
         } catch (e) {
             console.warn("HTML 범례 동적 갱신 중 예외 발생 (기본값 유지):", e);
         }
-    }
-
+    }   
     /**
      * 화면 중앙 하단 정보 패널 갱신 — 선택된 데이터셋의 file_name / date_utc 표시
      */
@@ -872,29 +919,29 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             }
 
             // 3. 8km 격자: 체크박스 상태 및 UI 숨김 (엔진 생성 전 적용)
-            const is8km = (key === '8km');
-            const boxFrameCb = document.getElementById('toggle-box-frame');
-            const allSlicesCb = document.getElementById('toggle-all-slices');
-            const toggleX = document.getElementById('toggle-x');
-            const toggleY = document.getElementById('toggle-y');
-            const toggleZ = document.getElementById('toggle-z');
+            // const is8km = (key === '8km');
+            // const boxFrameCb = document.getElementById('toggle-box-frame');
+            // const allSlicesCb = document.getElementById('toggle-all-slices');
+            // const toggleX = document.getElementById('toggle-x');
+            // const toggleY = document.getElementById('toggle-y');
+            // const toggleZ = document.getElementById('toggle-z');
 
-            if (boxFrameCb) boxFrameCb.checked = !is8km;
-            if (allSlicesCb) {
-                allSlicesCb.checked = !is8km;
-                allSlicesCb.disabled = is8km;
-            }
-            if (is8km) {
-                if (toggleX) toggleX.checked = false;
-                if (toggleY) toggleY.checked = false;
-                if (toggleZ) toggleZ.checked = false;
-            }
+            // if (boxFrameCb) boxFrameCb.checked = !is8km;
+            // if (allSlicesCb) {
+            //     allSlicesCb.checked = !is8km;
+            //     allSlicesCb.disabled = is8km;
+            // }
+            // if (is8km) {
+            //     if (toggleX) toggleX.checked = false;
+            //     if (toggleY) toggleY.checked = false;
+            //     if (toggleZ) toggleZ.checked = false;
+            // }
 
-            const sections = ['section-box-frame', 'section-slice-group'];
-            sections.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.style.display = is8km ? 'none' : '';
-            });
+            // const sections = ['section-box-frame', 'section-slice-group'];
+            // sections.forEach(id => {
+            //     const el = document.getElementById(id);
+            //     if (el) el.style.display = is8km ? 'none' : '';
+            // });
 
             // 4. 신규 엔진/레전드 생성
             windEngine = new GpuParticleEngine(viewer, metadata, binaryData);
@@ -946,6 +993,16 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 const sfMin = parseInt(speedFilterMin.value, 10);
                 const sfMax = parseInt(speedFilterMax.value, 10);
                 windEngine.setSpeedFilter(sfMin, sfMax);
+            }
+
+            // 나선(사이클론) 설정 유지: 엔진 재생성 시 슬라이더 현재값 재적용
+            if (typeof spiralToggle !== 'undefined' && spiralToggle) {
+                windEngine.setSpiral(
+                    spiralToggle.checked,
+                    spiralThresholdSlider ? parseInt(spiralThresholdSlider.value, 10) : 25,
+                    spiralRadiusSlider ? parseFloat(spiralRadiusSlider.value) : 100.0,
+                    spiralTurnsSlider ? parseFloat(spiralTurnsSlider.value) : 1.5
+                );
             }
 
             // JS에서 정의된 컬러맵과 설정값으로 HTML 범례 스타일 및 눈금 자동 갱신
@@ -1190,6 +1247,71 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             if (window.particleEngine) window.particleEngine.setComponentGain('w', gain);
         });
     }
+
+    // ==========================================
+    // 나선(사이클론) 표현: on/off 토글 + 시작풍속/반경/회전수 슬라이더
+    // ==========================================
+    const spiralToggle = document.getElementById('toggle-spiral');
+    const spiralOptions = document.getElementById('spiral-options');
+    const spiralThresholdSlider = document.getElementById('spiral-threshold');
+    const spiralThresholdVal = document.getElementById('spiral-threshold-val');
+    const spiralRadiusSlider = document.getElementById('spiral-radius');
+    const spiralRadiusVal = document.getElementById('spiral-radius-val');
+    const spiralTurnsSlider = document.getElementById('spiral-turns');
+    const spiralTurnsVal = document.getElementById('spiral-turns-val');
+
+    function applySpiralSettings() {
+        if (!window.particleEngine) return;
+        const on = spiralToggle ? spiralToggle.checked : false;
+        const threshold = spiralThresholdSlider ? parseInt(spiralThresholdSlider.value, 10) : 25;
+        const radiusKm = spiralRadiusSlider ? parseFloat(spiralRadiusSlider.value) : 100.0;
+        const turns = spiralTurnsSlider ? parseFloat(spiralTurnsSlider.value) : 1.5;
+        window.particleEngine.setSpiral(on, threshold, radiusKm, turns);
+    }
+
+    function updateSpiralUI() {
+        if (!spiralToggle) return;
+        const on = spiralToggle.checked;
+        if (spiralOptions) {
+            spiralOptions.style.opacity = on ? '1' : '0.4';
+            spiralOptions.style.pointerEvents = on ? 'auto' : 'none';
+        }
+        if (spiralThresholdSlider && spiralThresholdVal) {
+            spiralThresholdVal.textContent = spiralThresholdSlider.value + ' m/s';
+        }
+        if (spiralRadiusSlider && spiralRadiusVal) {
+            spiralRadiusVal.textContent = Math.round(parseFloat(spiralRadiusSlider.value)) + ' km';
+        }
+        if (spiralTurnsSlider && spiralTurnsVal) {
+            spiralTurnsVal.textContent = parseFloat(spiralTurnsSlider.value).toFixed(1);
+        }
+    }
+
+    if (spiralToggle) {
+        spiralToggle.addEventListener('change', () => {
+            updateSpiralUI();
+            applySpiralSettings();
+        });
+    }
+    if (spiralThresholdSlider) {
+        spiralThresholdSlider.addEventListener('input', () => {
+            updateSpiralUI();
+            applySpiralSettings();
+        });
+    }
+    if (spiralRadiusSlider) {
+        spiralRadiusSlider.addEventListener('input', () => {
+            updateSpiralUI();
+            applySpiralSettings();
+        });
+    }
+    if (spiralTurnsSlider) {
+        spiralTurnsSlider.addEventListener('input', () => {
+            updateSpiralUI();
+            applySpiralSettings();
+        });
+    }
+    updateSpiralUI();
 
     // ==========================================
     // 풍속 필터: 듀얼 슬라이더(min/max) + 풍속 등급 라디오
