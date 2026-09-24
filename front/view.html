@@ -28,48 +28,110 @@
         display: none !important;
     }
 
-    /* 접기/펴기 애니메이션 스타일 */
+    /* =========================================================
+       1. 패널 및 세련된 책갈피(Bookmark) 접기/펴기 스타일
+    ========================================================= */
     #slider-panel {
         position: absolute;
         top: 20px;
         left: 20px;
         z-index: 999;
-        background: rgba(15, 23, 42, 0.9);
+        background: rgba(15, 23, 42, 0.92);
+        backdrop-filter: blur(8px);
         padding: 14px;
-        border-radius: 8px;
+        /* 수정: 우측 상단 모서리를 직각(0)으로 만들어 버튼과 매끄럽게 연결 */
+        border-radius: 12px 0 12px 12px;
         color: #fff;
         font-family: sans-serif;
-        border: 1px solid #334155;
-        width: 230px;
-        transition: transform 0.3s ease-in-out;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        width: 250px;
+        box-sizing: border-box;
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+        max-height: calc(100vh - 40px);
+        display: flex;
+        flex-direction: column;
     }
 
-    /* 접혔을 때 왼쪽으로 이동 */
+    /* 책갈피 형태로 수직/수평 완전히 감춰짐 */
     #slider-panel.collapsed {
-        transform: translateX(-250px);
+        transform: translateX(-275px);
     }
 
-    /* 패널 내용 스크롤 영역 (토글 버튼은 스크롤 영역 밖의 #slider-panel에 위치) */
+    /* =========================================================
+       모바일/태블릿 반응형 UI & 슬림/모던 커스텀 스크롤바
+    ========================================================= */
     #slider-panel-scroll {
-        max-height: calc(100vh - 60px);
         overflow-y: auto;
         overflow-x: hidden;
-        padding-right: 4px;
+        padding-right: 2px;
+        flex: 1;
+        
+        /* Firefox 전용 (두께 아주 얇게, 트랙은 투명하게) */
         scrollbar-width: thin;
-        scrollbar-color: #475569 transparent;
-    }
-    #slider-panel-scroll::-webkit-scrollbar {
-        width: 6px;
-    }
-    #slider-panel-scroll::-webkit-scrollbar-track {
-        background: transparent;
-    }
-    #slider-panel-scroll::-webkit-scrollbar-thumb {
-        background: #475569;
-        border-radius: 3px;
+        scrollbar-color: rgba(56, 189, 248, 0.5) transparent;
     }
 
-    /* 접기/펴기 가능한 섹션 (디폴트: 접힘) */
+    /* Webkit (Chrome, Edge, Safari 등) 전용 슬림 스크롤바 */
+    #slider-panel-scroll::-webkit-scrollbar,
+    #bookmark-list::-webkit-scrollbar {
+        width: 3px;
+    }
+
+    /* 트랙(배경)을 투명하게 만들어 눈에 띄지 않도록 처리 */
+    #slider-panel-scroll::-webkit-scrollbar-track,
+    #bookmark-list::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    /* 막대(Thumb) 스타일: 반투명 상태였다가 마우스 호버 시 명확해짐 */
+    #slider-panel-scroll::-webkit-scrollbar-thumb,
+    #bookmark-list::-webkit-scrollbar-thumb {
+        background: rgba(56, 189, 248, 0.4);
+        border-radius: 10px;
+        transition: background 0.2s ease;
+    }
+
+    #slider-panel-scroll::-webkit-scrollbar-thumb:hover,
+    #bookmark-list::-webkit-scrollbar-thumb:hover {
+        background: rgba(56, 189, 248, 0.8);
+    }
+
+    /* 좌측 슬라이더 패널 토글 버튼 */
+    #toggle-panel-btn {
+        position: absolute;
+        right: -32px;
+        /* 수정: 패널 상단 border(1px)와 오차 없이 맞춤 */
+        top: -1px;
+        width: 32px;
+        height: 34px;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        border-left: none; /* 패널과 접하는 왼쪽 선 제거 */
+        /* 수정: 우측 모서리만 둥글게 처리하여 상단 일체화 */
+        border-radius: 0 10px 10px 0;
+        color: #38bdf8;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: bold;
+        box-shadow: 4px 0 12px rgba(0,0,0,0.3);
+        transition: all 0.2s ease;
+        padding: 4px 0;
+    }
+    #toggle-panel-btn:hover {
+        background: #1e293b;
+        color: #7dd3fc;
+    }
+    #toggle-panel-btn .bookmark-icon {
+        font-size: 14px;
+        margin-bottom: 2px;
+    }
+
+    /* 섹션 레이아웃 */
     .panel-section {
         margin-bottom: 8px;
     }
@@ -77,15 +139,19 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background: rgba(30, 41, 59, 0.5);
+        background: rgba(30, 41, 59, 0.7);
         border: 1px solid #475569;
         border-radius: 6px;
-        padding: 6px 8px;
+        padding: 7px 10px;
         cursor: pointer;
         font-size: 11px;
         color: #f8fafc;
         font-weight: bold;
         user-select: none;
+        transition: background 0.2s;
+    }
+    .panel-section-header:hover {
+        background: rgba(51, 65, 85, 0.8);
     }
     .panel-section-header .section-arrow {
         color: #38bdf8;
@@ -103,25 +169,6 @@
         display: block;
     }
 
-    /* 책갈피 형태의 토글 버튼 */
-    #toggle-panel-btn {
-        position: absolute;
-        right: -28px;
-        top: 12px;
-        width: 28px;
-        height: 36px;
-        background: rgba(15, 23, 42, 0.9);
-        border: 1px solid #334155;
-        border-left: none;
-        border-radius: 0 6px 6px 0;
-        color: #38bdf8;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-    }
-
     .control-group {
         background: rgba(30, 41, 59, 0.5);
         border: 1px solid #475569;
@@ -130,7 +177,7 @@
         margin-bottom: 8px;
     }
 
-    /* 풍속 필터: 겹쳐진 듀얼 range 슬라이더 */
+    /* 슬라이더 제어 요소 */
     #speed-filter-range .dual-range {
         position: absolute;
         top: 0;
@@ -142,12 +189,6 @@
         pointer-events: none;
         -webkit-appearance: none;
         appearance: none;
-    }
-    #speed-filter-range .dual-range::-webkit-slider-runnable-track {
-        background: transparent;
-    }
-    #speed-filter-range .dual-range::-moz-range-track {
-        background: transparent;
     }
     #speed-filter-range .dual-range::-webkit-slider-thumb {
         -webkit-appearance: none;
@@ -171,23 +212,31 @@
         cursor: pointer;
     }
 
-    /* 우측 하단 등에 자동 생성되는 불필요한 기본 범례 박스 강제 숨김 처리 */
+    /* 우측 범례 및 북마크 컨테이너 위치 */
     .wind-legend-container, div[style*="position: absolute"][style*="bottom: 20px; right: 20px;"] {
         display: none !important;
     }
  
-    /* 우측 상단: 풍속 (m/s) 세로 범례 패널 */
-    #wind-legend-panel {
+    #right-side-container {
         position: absolute;
         top: 48px;
         right: 8px;
         z-index: 999;
-        background: rgba(15, 23, 42, 0.9);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-end;
+    }
+
+    #wind-legend-panel {
+        background: rgba(15, 23, 42, 0.92);
+        backdrop-filter: blur(8px);
         padding: 10px 12px;
         border-radius: 8px;
         color: #fff;
         font-family: sans-serif;
-        border: 1px solid #334155;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
     #wind-legend-panel .legend-title {
         font-size: 11px;
@@ -197,12 +246,17 @@
     }
     #wind-legend-body {
         display: flex;
-        gap: 4px;
+        gap: 8px;
     }
     #legend-gradient-bar {
-        width: 10px;
-        height: 320px;
-        border-radius: 2px;
+        width: 12px;
+        height: 220px;
+        overflow: hidden;
+        border-radius: 3px;
+
+        box-sizing: border-box;
+        image-rendering: pixelated;      /* 브라우저가 색상 경계를 뭉개지 않고 선명하게 자르도록 고정 */
+        transform: translateZ(0);        
         background: linear-gradient(to top, rgb(0,76,230), rgb(0,204,230), rgb(25,204,50), rgb(230,230,0), rgb(230,25,25));
     }
     #legend-labels-container {
@@ -212,9 +266,170 @@
         font-size: 9px;
         color: #aaa;
         text-align: right;
+        
+        /* 추가: gradient-bar와 동일한 높이를 보장하여 1:1 수평 유지 */
+        height: 220px;
+        box-sizing: border-box;
     }
 
-    /* 화면 중앙 하단: 선택된 데이터셋 메타데이터 표시 */
+    /* =========================================================
+       2. 카메라 & 바람 제어 셋팅 북마크 패널 UI (접힘/펼침 구현)
+    ========================================================= */
+    #bookmark-panel {
+        position: relative;
+        background: rgba(15, 23, 42, 0.92);
+        backdrop-filter: blur(8px);
+        padding: 12px;
+        /* 수정: 좌측 상단 모서리를 직각(0)으로 만들어 버튼과 매끄럽게 연결 */
+        border-radius: 0 8px 8px 8px;
+        color: #fff;
+        font-family: sans-serif;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        width: 140px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        box-sizing: border-box;
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    }
+
+    /* 북마크 수평 접힘 스타일 */
+    #bookmark-panel.collapsed {
+        transform: translateX(calc(100% + 12px));
+    }
+
+    /* 우측 북마크 패널 전용 토글 버튼 (좌측으로 노출) */
+    #toggle-bookmark-btn {
+        position: absolute;
+        left: -32px;
+        /* 수정: 패널 상단 border(1px)와 오차 없이 맞춤 */
+        top: -1px;
+        width: 32px;
+        height: 34px;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        border-right: none; /* 패널과 접하는 오른쪽 선 제거 */
+        /* 수정: 좌측 모서리만 둥글게 처리하여 상단 일체화 */
+        border-radius: 10px 0 0 10px;
+        color: #38bdf8;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: bold;
+        box-shadow: -4px 0 12px rgba(0,0,0,0.3);
+        transition: all 0.2s ease;
+        padding: 4px 0;
+    }
+    #toggle-bookmark-btn:hover {
+        background: #1e293b;
+        color: #7dd3fc;
+    }
+    #toggle-bookmark-btn .bookmark-icon {
+        font-size: 14px;
+        margin-bottom: 2px;
+    }
+
+    #bookmark-panel .bookmark-title-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 6px;
+    }
+    #bookmark-panel .bookmark-title {
+        font-size: 12px;
+        font-weight: bold;
+        color: #38bdf8;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    #bookmark-panel .bookmark-count {
+        font-size: 10px;
+        color: #94a3b8;
+    }
+    .btn-add-bookmark {
+        width: 100%;
+        background: #0284c7;
+        color: #fff;
+        border: none;
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        margin-bottom: 8px;
+    }
+    .btn-add-bookmark:hover {
+        background: #0369a1;
+    }
+    #bookmark-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    .bookmark-item {
+        background: rgba(30, 41, 59, 0.7);
+        border: 1px solid #475569;
+        border-radius: 4px;
+        padding: 6px 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .bookmark-item:hover {
+        background: rgba(51, 65, 85, 0.9);
+        border-color: #38bdf8;
+    }
+    .bookmark-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        overflow: hidden;
+    }
+    .bookmark-name {
+        font-size: 11px;
+        color: #f8fafc;
+        font-weight: bold;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .bookmark-time {
+        font-size: 9px;
+        color: #64748b;
+    }
+    .bookmark-del-btn {
+        background: transparent;
+        border: none;
+        color: #ef4444;
+        font-size: 12px;
+        cursor: pointer;
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    .bookmark-del-btn:hover {
+        background: rgba(239, 68, 68, 0.2);
+    }
+    .empty-bookmark-msg {
+        font-size: 10px;
+        color: #64748b;
+        text-align: center;
+        padding: 10px 0;
+    }
+
+    /* 화면 중앙 하단: 선택된 데이터셋 메타데이터 */
     #dataset-info-panel {
         position: absolute;
         bottom: 20px;
@@ -291,7 +506,7 @@
 <body>
 <div id="cesiumContainer"></div>
 
-<!-- 데이터셋 로딩 중 오버레이 (dimmed + 스피너) -->
+<!-- 데이터셋 로딩 중 오버레이 -->
 <div id="loading-overlay">
     <div class="spinner"></div>
     <div class="loading-text" id="loading-text">데이터셋 로딩 중...</div>
@@ -308,326 +523,340 @@
     </div>
 </div>
 
-<!-- 풍속 Color Map 세로 범례 (JS 스크립트 로드 후 동적 반영) -->
-<div id="wind-legend-panel">
-    <div class="legend-title">풍속</div>
-    <div id="wind-legend-body">
-        <div id="legend-gradient-bar"></div>
-        <div id="legend-labels-container">
-            <span>150</span><span>112.5</span><span>75</span><span>37.5</span><span>0</span>
+<!-- 우측 상단/하단 수직 레이아웃 (범례 + 북마크 패널) -->
+<div id="right-side-container">
+    <div id="wind-legend-panel">
+        <div class="legend-title">풍속</div>
+        <div id="wind-legend-body">
+            <div id="legend-gradient-bar"></div>
+            <div id="legend-labels-container">
+                <span>150</span><span>112.5</span><span>75</span><span>37.5</span><span>0</span>
+            </div>
+        </div>
+        <div class="legend-title" style="margin-top:4px;">m/s</div>
+    </div>
+
+    <!-- 카메라 + 제어 셋팅 북마크 패널 -->
+    <div id="bookmark-panel">
+        <button id="toggle-bookmark-btn" title="북마크 접기/펴기">
+            <span class="bookmark-icon">📌</span>
+            <!-- <span id="toggle-bookmark-arrow">▶</span> -->
+        </button>
+        <div class="bookmark-title-bar">
+            <span class="bookmark-title">북마크</span>
+            <span class="bookmark-count" id="bookmark-count">(0/5)</span>
+        </div>
+        <button id="btn-add-bookmark" class="btn-add-bookmark">+ 뷰 저장</button>
+        <div id="bookmark-list">
+            <div class="empty-bookmark-msg">저장된 북마크가 없습니다.</div>
         </div>
     </div>
-    <div class="legend-title">m/s</div>
 </div>
 
+<!-- 수직/수평 책갈피 토글형 제어 패널 -->
 <div id="slider-panel">
-    <button id="toggle-panel-btn" title="패널 접기/펴기">◀</button>
-    <h3 style="margin:0 0 10px 0; font-size:13px; color:#38bdf8;">단면도 및 스케일 제어</h3>
-
-    <!-- 데이터셋 선택 (3km / 8km 격자) -->
-    <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
-        <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">데이터셋 선택</div>
-        <select id="dataset-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
-            <option value="3km">3km 격자 (r030 동아시아)</option>
-            <option value="8km" selected>8km 격자 (g576 동아시아)</option>
-        </select>
-        <div id="dataset-status" style="font-size:9px; color:#94a3b8; margin-top:3px;"></div>
-    </div>
-
-
-    <!-- 고도 과장 배율 (접기/펴기 없음) -->
-    <div id="section-height-scale-wrap" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
-        <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">
-            고도 과장 배율: <span id="scale-val">30</span>x
-        </div>
-        <input type="range" id="height-scale" min="10" max="70" step="1" value="30" style="width:100%;">
-        <div id="hs-labels" style="display:flex; justify-content:space-between; padding-top:2px;">
-            <span style="font-size:9px; color:#94a3b8;">1</span>
-            <span style="font-size:9px; color:#94a3b8;">2</span>
-            <span style="font-size:9px; color:#94a3b8;">3</span>
-            <span style="font-size:9px; color:#94a3b8;">4</span>
-            <span style="font-size:9px; color:#94a3b8;">5</span>
-            <span style="font-size:9px; color:#94a3b8;">6</span>
-            <span style="font-size:9px; color:#94a3b8;">7</span>
-        </div>
-    </div>
-
-    <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
-        <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">베이스맵 선택</div>
-        <select id="base-map-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
-            <option value="esri-satellite" selected>ESRI Satellite</option>
-            <option value="mapbox-satellite">Mapbox Satellite</option>
-            <option value="mapbox-streets">Mapbox Streets</option>
-        </select>
-    </div>
-
-    <!-- [분리된 토글 1] 3D 범위 박스(와이어프레임) 표시 제어 -->
-    <div id="section-box-frame" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-        <span style="font-size:11px; color:#38bdf8; font-weight:bold;">3D 범위 박스</span>
-        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
-            <input type="checkbox" id="toggle-box-frame" style="cursor:pointer;"> 표시
-        </label>
-    </div>
-
-    <!-- [분리된 토글 2] 고도(기압) 레벨 텍스트 표시 제어 -->
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
-        <span style="font-size:11px; color:#38bdf8; font-weight:bold;">고도(기압) 레벨 텍스트</span>
-        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
-            <input type="checkbox" id="toggle-legend-text" checked style="cursor:pointer;"> 표시
-        </label>
-    </div>
+    <button id="toggle-panel-btn" title="패널 접기/펴기">
+        <span class="bookmark-icon">🔖</span>
+        <!-- <span id="toggle-arrow">◀</span> -->
+    </button>
+    <h3 style="margin:0 0 10px 0; font-size:13px; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+        <span>💨</span> 바람 표현 제어
+    </h3>
 
     <div id="slider-panel-scroll">
 
-    <!-- 격자 시각화 (지면 단면 / 24레벨 직육면체) -->
-    <div class="panel-section" id="section-grid-wrap">
-        <div class="panel-section-header">
-            <span>격자 시각화</span>
-            <span style="display:flex; align-items:center; gap:8px;">
-                <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px; font-weight:normal;">
-                    <input type="checkbox" id="toggle-grid" style="cursor:pointer;" checked> 표시
-                </label>
-                <span class="section-arrow">▶</span>
-            </span>
+        <!-- 데이터셋 선택 -->
+        <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+            <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">데이터셋 선택</div>
+            <select id="dataset-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
+                <option value="3km">3km 격자 (r030 동아시아)</option>
+                <option value="8km" selected>8km 격자 (g576 동아시아)</option>
+            </select>
+            <div id="dataset-status" style="font-size:9px; color:#94a3b8; margin-top:3px;"></div>
         </div>
-        <div class="panel-section-body">
-    <div class="control-group" id="section-grid">
-            <div style="display:flex; flex-direction:column; gap:3px;">
-                <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                    <input type="radio" name="grid-mode" value="ground" style="cursor:pointer;">
-                    <span>지면 단면 격자</span>
-                </label>
-                <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                    <input type="radio" name="grid-mode" value="levels" checked style="cursor:pointer;">
-                    <span>24레벨 격자 (직육면체)</span>
-                </label>
+
+        <!-- 고도 과장 배율 -->
+        <div id="section-height-scale-wrap" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+            <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">
+                고도 과장 배율: <span id="scale-val">30</span>x
             </div>
-            <div style="margin-top:6px;">
-                <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1;">
-                    <span>격자 묶음 (step)</span>
-                    <span id="grid-step-val" style="color:#f8fafc;">1200</span>
-                </div>
-                <input type="range" id="grid-step-slider" min="1" max="1200" step="1" value="1200"
-                    style="width:100%; cursor:pointer;">
-                <div style="display:flex; justify-content:space-between; font-size:9px; color:#64748b; padding-top:2px;">
-                    <span>1</span><span>230</span><span>530</span><span>850</span><span>1200</span>
-                </div>
+            <input type="range" id="height-scale" min="10" max="70" step="1" value="30" style="width:100%;">
+            <div id="hs-labels" style="display:flex; justify-content:space-between; padding-top:2px;">
+                <span style="font-size:9px; color:#94a3b8;">10</span>
+                <span style="font-size:9px; color:#94a3b8;">25</span>
+                <span style="font-size:9px; color:#94a3b8;">40</span>
+                <span style="font-size:9px; color:#94a3b8;">55</span>
+                <span style="font-size:9px; color:#94a3b8;">70</span>
             </div>
-    </div>
         </div>
-    </div>
 
-    <!-- 바람장 파티클 레이어 (하층/중층/상층) 토글 -->
-    <div class="panel-section" id="section-wind-layers-wrap">
-        <div class="panel-section-header">
-            <span>바람장 레이어</span>
-            <span class="section-arrow">▶</span>
+        <!-- 베이스맵 선택 -->
+        <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+            <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">베이스맵 선택</div>
+            <select id="base-map-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
+                <option value="esri-satellite" selected>ESRI Satellite</option>
+                <option value="mapbox-satellite">Mapbox Satellite</option>
+                <option value="mapbox-streets">Mapbox Streets</option>
+            </select>
         </div>
-        <div class="panel-section-body">
-    <div class="control-group" id="section-wind-layers">
-        <div style="display:flex; flex-direction:column; gap:4px;">
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="checkbox" id="toggle-layer-low" checked style="cursor:pointer;">
-                <span>하층 (1000–700 hPa)</span>
-            </label>
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="checkbox" id="toggle-layer-mid" checked style="cursor:pointer;">
-                <span>중층 (650–300 hPa)</span>
-            </label>
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="checkbox" id="toggle-layer-high" checked style="cursor:pointer;">
-                <span>상층 (250–50 hPa)</span>
-            </label>
-        </div>
-    </div>
-        </div>
-    </div>
 
-    <!-- 바람 성분 필터 (u/v/w 토글 + w 증폭 게인) -->
-    <div class="panel-section" id="section-component-filter-wrap">
-        <div class="panel-section-header">
-            <span>바람 성분 필터</span>
-            <span class="section-arrow">▶</span>
-        </div>
-        <div class="panel-section-body">
-    <div class="control-group" id="section-component-filter">
-        <div style="display:flex; flex-direction:column; gap:4px;">
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="checkbox" id="toggle-comp-u" checked style="cursor:pointer;">
-                <span>u — 동서바람 (Eastward)</span>
-            </label>
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="checkbox" id="toggle-comp-v" checked style="cursor:pointer;">
-                <span>v — 남북바람 (Northward)</span>
-            </label>
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="checkbox" id="toggle-comp-w" checked style="cursor:pointer;">
-                <span>w — 연직바람 (Vertical)</span>
-            </label>
-        </div>
-        <div style="margin-top:8px; border-top:1px dashed #475569; padding-top:8px;">
-            <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin-bottom:4px;">
-                <span>w 증폭 게인</span>
-                <span id="comp-w-gain-val" style="color:#38bdf8;">101</span>
-            </div>
-            <input type="range" id="comp-w-gain" min="1" max="1501" step="100" value="101" style="width:100%; cursor:pointer;">
-        </div>
-    </div>
-        </div>
-    </div>
-
-    <!-- 바람장 파티클 풍속 필터 (듀얼 슬라이더 + 풍속 등급 라디오) -->
-    <div class="panel-section" id="section-speed-filter-wrap">
-        <div class="panel-section-header">
-            <span>풍속 필터 (m/s)</span>
-            <span class="section-arrow">▶</span>
-        </div>
-        <div class="panel-section-body">
-    <div class="control-group" id="section-speed-filter">
-        <div id="speed-filter-range" style="position:relative; height:24px; margin:8px 0 4px 0;">
-            <div style="position:absolute; top:10px; left:0; right:0; height:4px; background:#334155; border-radius:2px;"></div>
-            <div id="speed-filter-track" style="position:absolute; top:10px; left:0; width:100%; height:4px; background:#38bdf8; border-radius:2px;"></div>
-            <input type="range" id="speed-filter-min" class="dual-range" min="0" max="70" step="5" value="0">
-            <input type="range" id="speed-filter-max" class="dual-range" min="0" max="70" step="5" value="70">
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:9px; color:#94a3b8;">
-            <span>0</span><span>17.5</span><span>35</span><span>52.5</span><span>70</span>
-        </div>
-        <div id="speed-filter-label" style="font-size:10px; color:#38bdf8; margin-top:4px;">전체 0 ~ 70 m/s</div>
-        <div style="display:flex; flex-direction:column; gap:3px; margin-top:6px;">
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="radio" name="speed-filter-preset" value="all" checked style="cursor:pointer;">
-                <span>전체 (0–70 m/s)</span>
-            </label>
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="radio" name="speed-filter-preset" value="light" style="cursor:pointer;">
-                <span>미풍 (0–5 m/s)</span>
-            </label>
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="radio" name="speed-filter-preset" value="weak" style="cursor:pointer;">
-                <span>약풍 (6–19 m/s)</span>
-            </label>
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="radio" name="speed-filter-preset" value="mod" style="cursor:pointer;">
-                <span>중풍 (20–39 m/s)</span>
-            </label>
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="radio" name="speed-filter-preset" value="strong" style="cursor:pointer;">
-                <span>강풍 (40–69 m/s)</span>
-            </label>
-            <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-                <input type="radio" name="speed-filter-preset" value="storm" style="cursor:pointer;">
-                <span>폭풍 (70 m/s 이상)</span>
-            </label>
-        </div>
-    </div>
-        </div>
-    </div>
-
-    <!-- 나선(사이클론) 표현 -->
-    <div class="panel-section" id="section-spiral-wrap">
-        <div class="panel-section-header">
-            <span>나선 강조 (Cyclone)</span>
-            <span class="section-arrow">▶</span>
-        </div>
-        <div class="panel-section-body">
-    <div class="control-group" id="section-spiral">
-        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" id="toggle-spiral" style="cursor:pointer;">
-            <span>나선 효과 사용</span>
-        </label>
-        <div id="spiral-options" style="margin-top:8px; border-top:1px dashed #475569; padding-top:8px; opacity:0.4; pointer-events:none;">
-            <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin-bottom:4px;">
-                <span>시작 풍속</span>
-                <span id="spiral-threshold-val" style="color:#38bdf8;">20 m/s</span>
-            </div>
-            <input type="range" id="spiral-threshold" min="10" max="60" step="5" value="20" style="width:100%; cursor:pointer;">
-            <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin:8px 0 4px 0;">
-                <span>반경</span>
-                <span id="spiral-radius-val" style="color:#38bdf8;">10 km</span>
-            </div>
-            <input type="range" id="spiral-radius" min="10" max="500" step="10" value="10" style="width:100%; cursor:pointer;">
-            <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin:8px 0 4px 0;">
-                <span>회전 수</span>
-                <span id="spiral-turns-val" style="color:#38bdf8;">0.5</span>
-            </div>
-            <input type="range" id="spiral-turns" min="0.1" max="6" step="0.1" value="0.5" style="width:100%; cursor:pointer;">
-        </div>
-    </div>
-        </div>
-    </div>
-
-    <!-- 단면도 레이어 그룹 (X/Y/Z) -->
-    <div class="panel-section" id="section-slice-group">
-        <div class="panel-section-header">
-            <span>단면도 레이어 그룹</span>
-            <span style="display:flex; align-items:center; gap:8px;">
-                <label style="font-size:10px; cursor:pointer; color:#cbd5e1; font-weight:normal;">
-                    <input type="checkbox" id="toggle-all-slices" checked style="cursor:pointer;"> 전체 켜기/끄기
-                </label>
-                <span class="section-arrow">▶</span>
-            </span>
-        </div>
-        <div class="panel-section-body">
-    <!-- X축 (경도) 그룹 -->
-    <div class="control-group" id="section-slice-x">
-        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
-            <span>X축 (경도): <span id="x-val">0</span>%</span>
-            <label style="cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:2px;">
-                <input type="checkbox" id="toggle-x" checked class="slice-checkbox" style="width:13px; height:13px; cursor:pointer;"> 표시
-            </label>
-        </div>
-        <input type="range" id="slice-x" min="0" max="100" value="0" style="width:100%;">
-    </div>
-
-    <!-- Y축 (위도) 그룹 -->
-    <div class="control-group" id="section-slice-y">
-        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
-            <span>Y축 (위도): <span id="y-val">100</span>%</span>
-            <label style="cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:2px;">
-                <input type="checkbox" id="toggle-y" checked class="slice-checkbox" style="width:13px; height:13px; cursor:pointer;"> 표시
-            </label>
-        </div>
-        <input type="range" id="slice-y" min="0" max="100" value="100" style="width:100%;">
-    </div>
-
-    <!-- Z축 (고도) 그룹 -->
-    <div class="control-group" id="section-slice-z">
-        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
-            <span>Z축 (고도): <span id="z-val">0</span>%</span>
-            <label style="cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:2px;">
-                <input type="checkbox" id="toggle-z" class="slice-checkbox" style="width:13px; height:13px; cursor:pointer;"> 표시
-            </label>
-        </div>
-        <input type="range" id="slice-z" min="0" max="100" value="0" style="width:100%;">
-    </div>
-        </div>
-    </div>
-
-    <!-- 환경 조명 옵션 -->
-    <div class="panel-section" id="section-env-lighting-wrap">
-        <div class="panel-section-header">
-            <span>환경 조명</span>
-            <span class="section-arrow">▶</span>
-        </div>
-        <div class="panel-section-body">
-    <div style="margin-top:8px; border-top:1px dashed #475569; padding-top:8px;">
-        <div style="font-size:11px; margin-bottom:6px; color:#f8fafc;">환경 조명</div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <span style="font-size:11px; color:#38bdf8; font-weight:bold;">하늘 대기 (Sky Atmosphere)</span>
+        <!-- 3D 범위 박스 -->
+        <div id="section-box-frame" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:11px; color:#38bdf8; font-weight:bold;">3D 범위 박스</span>
             <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
-                <input type="checkbox" id="toggle-sky-atmosphere" style="cursor:pointer;"> 표시
+                <input type="checkbox" id="toggle-box-frame" style="cursor:pointer;"> 표시
             </label>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:11px; color:#38bdf8; font-weight:bold;">태양 조명 (Enable Lighting)</span>
+
+        <!-- 고도(기압) 레벨 텍스트 -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+            <span style="font-size:11px; color:#38bdf8; font-weight:bold;">고도 레벨 텍스트</span>
             <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
-                <input type="checkbox" id="toggle-enable-lighting" checked style="cursor:pointer;"> 표시
+                <input type="checkbox" id="toggle-legend-text" checked style="cursor:pointer;"> 표시
             </label>
         </div>
-    </div>
+
+        <!-- 격자 시각화 -->
+        <div class="panel-section" id="section-grid-wrap">
+            <div class="panel-section-header">
+                <span>격자 시각화</span>
+                <span style="display:flex; align-items:center; gap:8px;">
+                    <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px; font-weight:normal;">
+                        <input type="checkbox" id="toggle-grid" style="cursor:pointer;" checked> 표시
+                    </label>
+                    <span class="section-arrow">▶</span>
+                </span>
+            </div>
+            <div class="panel-section-body">
+                <div class="control-group" id="section-grid">
+                    <div style="display:flex; flex-direction:column; gap:3px;">
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="grid-mode" value="ground" style="cursor:pointer;">
+                            <span>지면 단면 격자</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="grid-mode" value="levels" checked style="cursor:pointer;">
+                            <span>24레벨 격자 (직육면체)</span>
+                        </label>
+                    </div>
+                    <div style="margin-top:6px;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1;">
+                            <span>격자 묶음 (step)</span>
+                            <span id="grid-step-val" style="color:#f8fafc;">1200</span>
+                        </div>
+                        <input type="range" id="grid-step-slider" min="1" max="1200" step="1" value="1200" style="width:100%; cursor:pointer;">
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
+
+        <!-- 바람장 파티클 레이어 -->
+        <div class="panel-section" id="section-wind-layers-wrap">
+            <div class="panel-section-header">
+                <span>바람장 레이어</span>
+                <span class="section-arrow">▶</span>
+            </div>
+            <div class="panel-section-body">
+                <div class="control-group" id="section-wind-layers">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="toggle-layer-low" checked style="cursor:pointer;">
+                            <span>하층 (1000–700 hPa)</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="toggle-layer-mid" checked style="cursor:pointer;">
+                            <span>중층 (650–300 hPa)</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="toggle-layer-high" checked style="cursor:pointer;">
+                            <span>상층 (250–50 hPa)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 바람 성분 필터 -->
+        <div class="panel-section" id="section-component-filter-wrap">
+            <div class="panel-section-header">
+                <span>바람 성분 필터</span>
+                <span class="section-arrow">▶</span>
+            </div>
+            <div class="panel-section-body">
+                <div class="control-group" id="section-component-filter">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="toggle-comp-u" checked style="cursor:pointer;">
+                            <span>u — 동서바람 (Eastward)</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="toggle-comp-v" checked style="cursor:pointer;">
+                            <span>v — 남북바람 (Northward)</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="toggle-comp-w" checked style="cursor:pointer;">
+                            <span>w — 연직바람 (Vertical)</span>
+                        </label>
+                    </div>
+                    <div style="margin-top:8px; border-top:1px dashed #475569; padding-top:8px;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin-bottom:4px;">
+                            <span>w 증폭 게인</span>
+                            <span id="comp-w-gain-val" style="color:#38bdf8;">101</span>
+                        </div>
+                        <input type="range" id="comp-w-gain" min="1" max="1501" step="100" value="101" style="width:100%; cursor:pointer;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 풍속 필터 -->
+        <div class="panel-section" id="section-speed-filter-wrap">
+            <div class="panel-section-header">
+                <span>풍속 필터 (m/s)</span>
+                <span class="section-arrow">▶</span>
+            </div>
+            <div class="panel-section-body">
+                <div class="control-group" id="section-speed-filter">
+                    <div id="speed-filter-range" style="position:relative; height:24px; margin:8px 0 4px 0;">
+                        <div style="position:absolute; top:10px; left:0; right:0; height:4px; background:#334155; border-radius:2px;"></div>
+                        <div id="speed-filter-track" style="position:absolute; top:10px; left:0; width:100%; height:4px; background:#38bdf8; border-radius:2px;"></div>
+                        <input type="range" id="speed-filter-min" class="dual-range" min="0" max="70" step="5" value="0">
+                        <input type="range" id="speed-filter-max" class="dual-range" min="0" max="70" step="5" value="70">
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:9px; color:#94a3b8;">
+                        <span>0</span><span>17.5</span><span>35</span><span>52.5</span><span>70</span>
+                    </div>
+                    <div id="speed-filter-label" style="font-size:10px; color:#38bdf8; margin-top:4px;">전체 0 ~ 70 m/s</div>
+                    <div style="display:flex; flex-direction:column; gap:3px; margin-top:6px;">
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="speed-filter-preset" value="all" checked style="cursor:pointer;">
+                            <span>전체 (0–70 m/s)</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="speed-filter-preset" value="light" style="cursor:pointer;">
+                            <span>미풍 (0–5 m/s)</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="speed-filter-preset" value="weak" style="cursor:pointer;">
+                            <span>약풍 (6–19 m/s)</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="speed-filter-preset" value="mod" style="cursor:pointer;">
+                            <span>중풍 (20–39 m/s)</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="speed-filter-preset" value="strong" style="cursor:pointer;">
+                            <span>강풍 (40–69 m/s)</span>
+                        </label>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="speed-filter-preset" value="storm" style="cursor:pointer;">
+                            <span>폭풍 (70 m/s 이상)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 나선(사이클론) 표현 -->
+        <div class="panel-section" id="section-spiral-wrap">
+            <div class="panel-section-header">
+                <span>나선 강조 (Cyclone)</span>
+                <span class="section-arrow">▶</span>
+            </div>
+            <div class="panel-section-body">
+                <div class="control-group" id="section-spiral">
+                    <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="toggle-spiral" style="cursor:pointer;">
+                        <span>나선 효과 사용</span>
+                    </label>
+                    <div id="spiral-options" style="margin-top:8px; border-top:1px dashed #475569; padding-top:8px; opacity:0.4; pointer-events:none;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin-bottom:4px;">
+                            <span>시작 풍속</span>
+                            <span id="spiral-threshold-val" style="color:#38bdf8;">20 m/s</span>
+                        </div>
+                        <input type="range" id="spiral-threshold" min="10" max="60" step="5" value="20" style="width:100%; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin:8px 0 4px 0;">
+                            <span>반경</span>
+                            <span id="spiral-radius-val" style="color:#38bdf8;">10 km</span>
+                        </div>
+                        <input type="range" id="spiral-radius" min="10" max="500" step="10" value="10" style="width:100%; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; color:#cbd5e1; margin:8px 0 4px 0;">
+                            <span>회전 수</span>
+                            <span id="spiral-turns-val" style="color:#38bdf8;">0.5</span>
+                        </div>
+                        <input type="range" id="spiral-turns" min="0.1" max="6" step="0.1" value="0.5" style="width:100%; cursor:pointer;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 단면도 레이어 그룹 -->
+        <div class="panel-section" id="section-slice-group">
+            <div class="panel-section-header">
+                <span>단면도 레이어 그룹</span>
+                <span style="display:flex; align-items:center; gap:8px;">
+                    <label style="font-size:10px; cursor:pointer; color:#cbd5e1; font-weight:normal;">
+                        <input type="checkbox" id="toggle-all-slices" checked style="cursor:pointer;"> 전체 켜기/끄기
+                    </label>
+                    <span class="section-arrow">▶</span>
+                </span>
+            </div>
+            <div class="panel-section-body">
+                <div class="control-group" id="section-slice-x">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
+                        <span>X축 (경도): <span id="x-val">0</span>%</span>
+                        <label style="cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:2px;">
+                            <input type="checkbox" id="toggle-x" checked class="slice-checkbox" style="width:13px; height:13px; cursor:pointer;"> 표시
+                        </label>
+                    </div>
+                    <input type="range" id="slice-x" min="0" max="100" value="0" style="width:100%;">
+                </div>
+
+                <div class="control-group" id="section-slice-y">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
+                        <span>Y축 (위도): <span id="y-val">100</span>%</span>
+                        <label style="cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:2px;">
+                            <input type="checkbox" id="toggle-y" checked class="slice-checkbox" style="width:13px; height:13px; cursor:pointer;"> 표시
+                        </label>
+                    </div>
+                    <input type="range" id="slice-y" min="0" max="100" value="100" style="width:100%;">
+                </div>
+
+                <div class="control-group" id="section-slice-z">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
+                        <span>Z축 (고도): <span id="z-val">0</span>%</span>
+                        <label style="cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:2px;">
+                            <input type="checkbox" id="toggle-z" class="slice-checkbox" style="width:13px; height:13px; cursor:pointer;"> 표시
+                        </label>
+                    </div>
+                    <input type="range" id="slice-z" min="0" max="100" value="0" style="width:100%;">
+                </div>
+            </div>
+        </div>
+
+        <!-- 환경 조명 옵션 -->
+        <div class="panel-section" id="section-env-lighting-wrap">
+            <div class="panel-section-header">
+                <span>환경 조명</span>
+                <span class="section-arrow">▶</span>
+            </div>
+            <div class="panel-section-body">
+                <div class="control-group">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:11px; color:#38bdf8; font-weight:bold;">하늘 대기 (Sky)</span>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
+                            <input type="checkbox" id="toggle-sky-atmosphere" style="cursor:pointer;"> 표시
+                        </label>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:11px; color:#38bdf8; font-weight:bold;">태양 조명 (Sun)</span>
+                        <label style="font-size:11px; cursor:pointer; color:#cbd5e1; display:flex; align-items:center; gap:4px;">
+                            <input type="checkbox" id="toggle-enable-lighting" checked style="cursor:pointer;"> 표시
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
 
     </div><!-- /slider-panel-scroll -->
 </div>
@@ -667,25 +896,9 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         console.error("Cesium Viewer 초기화 실패:", e);
     }
 
-    async function initTerrain() {
-        if (!viewer) return;
-        try {
-            const koreaRectangle = Cesium.Rectangle.fromDegrees(124.0, 33.0, 132.0, 43.0);
-            const koreaTerrainProvider = await Cesium.CesiumTerrainProvider.fromUrl(
-                "/terrain/korea/v3/",
-                { rectangle: koreaRectangle, requestVertexNormals: true }
-            );
-            viewer.terrainProvider = koreaTerrainProvider;
-        } catch (error) {
-            console.error("Failed to initialize Cesium Terrain:", error);
-        }
-    }
-    // initTerrain();
-
     const MAPBOX_TOKEN = "{{ MAPBOX_TOKEN }}";
     function getBaseMapProvider(type) {
         if (type === 'esri-satellite') {
-            // ESRI World Imagery (ArcGIS Online 타일)
             return new Cesium.UrlTemplateImageryProvider({
                 url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                 maximumLevel: 19,
@@ -693,14 +906,11 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             });
         }
         if (type === 'mapbox-streets') {
-            // Mapbox Static Images API는 vector 스타일(streets)을 지원하지 않아 410 에러 발생.
-            // streets 라벨은 OpenStreetMap raster 타일로 대체.
             return new Cesium.UrlTemplateImageryProvider({
                 url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 credit: '© OpenStreetMap contributors'
             });
         }
-        // 기본: Mapbox Satellite (raster, Static Images API 지원)
         return new Cesium.UrlTemplateImageryProvider({
             url: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg90?access_token=${MAPBOX_TOKEN}`
         });
@@ -723,20 +933,32 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         viewer.scene.globe.enableLighting = true;
     }
 
-    // UI 패널 토글
+    // 좌측 책갈피 패널 토글 제어
     const sliderPanel = document.getElementById('slider-panel');
     const toggleBtn = document.getElementById('toggle-panel-btn');
+    // const toggleArrow = document.getElementById('toggle-arrow');
     if (toggleBtn && sliderPanel) {
         toggleBtn.addEventListener('click', () => {
             sliderPanel.classList.toggle('collapsed');
-            toggleBtn.textContent = sliderPanel.classList.contains('collapsed') ? '▶' : '◀';
+            // if (toggleArrow) {
+            //     toggleArrow.textContent = sliderPanel.classList.contains('collapsed') ? '▶' : '◀';
+            // }
         });
     }
 
-    // 섹션 접기/펴기 (collapse/expand) — 디폴트: 접힘
+    // 우측 북마크 패널 수직/수평 토글 제어
+    const bookmarkPanel = document.getElementById('bookmark-panel');
+    const toggleBookmarkBtn = document.getElementById('toggle-bookmark-btn');
+    // const toggleBookmarkArrow = document.getElementById('toggle-bookmark-arrow');
+    if (toggleBookmarkBtn && bookmarkPanel) {
+        toggleBookmarkBtn.addEventListener('click', () => {
+            bookmarkPanel.classList.toggle('collapsed');
+        });
+    }
+
+    // 섹션 접기/펴기 (collapse/expand)
     document.querySelectorAll('.panel-section-header').forEach(header => {
         header.addEventListener('click', (e) => {
-            // 체크박스/라디오/슬라이더 등 인터랙티브 요소 클릭 시 접기/펴기 방지
             if (e.target.closest('input, select, button, a')) return;
             const section = header.closest('.panel-section');
             if (section) section.classList.toggle('open');
@@ -748,19 +970,17 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     let gridVisualizer = null;
     let currentDatasetKey = '3km';
 
-    // 바람장 레이어 (하층/중층/상층) 체크박스
+    // 컨트롤 요소 참조
     const toggleLayerLow = document.getElementById('toggle-layer-low');
     const toggleLayerMid = document.getElementById('toggle-layer-mid');
     const toggleLayerHigh = document.getElementById('toggle-layer-high');
 
-    // 바람 성분 필터 (u/v/w) 체크박스 + w 증폭 게인 슬라이더
     const toggleCompU = document.getElementById('toggle-comp-u');
     const toggleCompV = document.getElementById('toggle-comp-v');
     const toggleCompW = document.getElementById('toggle-comp-w');
     const compWGainSlider = document.getElementById('comp-w-gain');
     const compWGainVal = document.getElementById('comp-w-gain-val');
 
-    // 로딩 오버레이 표시/숨김 헬퍼
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingText = document.getElementById('loading-text');
     function showLoadingOverlay(label) {
@@ -771,7 +991,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         if (loadingOverlay) loadingOverlay.style.display = 'none';
     }
 
-    // 데이터셋 레지스트리: key → { json, bin, label, camera }
     const DATASETS = {
         '3km': {
             json: '/temp_data/wind3d/metadata.json',
@@ -793,11 +1012,8 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         }
     };
 
-    // 데이터셋 캐시: key → { metadata, binaryData }
-    // 브라우저 리프레시 전까지 유지 — 3km → 8km → 3km 전환 시 재로딩 없이 재사용
     const datasetCache = {};
 
-    // UI 범례를 동적으로 업데이트하는 헬퍼 함수
     function updateHtmlLegendFromEngine(engineInstance) {
         const gradientBar = document.getElementById('legend-gradient-bar');
         const labelsContainer = document.getElementById('legend-labels-container');
@@ -813,7 +1029,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 const count = colorMap.length;
                 const cssStops = [];
 
-                // 깍두기(계단형) 블록을 만들기 위해 각 구간의 시작(start)과 끝(end)에 같은 색상을 부여
                 colorMap.forEach((item, idx) => {
                     let rgb;
                     if (item.color && Array.isArray(item.color)) {
@@ -826,39 +1041,31 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                         rgb = `rgb(0, 100, 255)`;
                     }
 
-                    // 각 블록의 시작 백분율과 끝 백분율 계산
                     const startPercent = (idx / count) * 100;
                     const endPercent = ((idx + 1) / count) * 100;
 
-                    // 같은 색상으로 시작과 끝 지점을 2번 넣어 경계선을 명확하게 표현
                     cssStops.push(`${rgb} ${startPercent}%`);
                     cssStops.push(`${rgb} ${endPercent}%`);
                 });
 
-                // 세로 범례: 하단(0) → 상단(max) 방향 단색 계단형 그라디언트
                 gradientBar.style.background = `linear-gradient(to top, ${cssStops.join(', ')})`;
 
-                // 풍속 눈금 텍스트 표시
                 labelsContainer.innerHTML = [...colorMap].reverse().map(item => {
                     const speed = item.speed;
                     let displayValue = '';
-
                     if (speed < 100) {
                         if (speed % 25 === 0) displayValue = speed;
                     } else {
                         displayValue = speed;
                     }
-
                     return `<span>${displayValue}</span>`;
                 }).join('');
             }
         } catch (e) {
-            console.warn("HTML 범례 동적 갱신 중 예외 발생 (기본값 유지):", e);
+            console.warn("HTML 범례 동적 갱신 중 예외 발생:", e);
         }
     }   
-    /**
-     * 화면 중앙 하단 정보 패널 갱신 — 선택된 데이터셋의 file_name / date_utc 표시
-     */
+
     function updateDatasetInfoPanel(metadata) {
         const fileNameEl = document.getElementById('dataset-file-name');
         const dateUtcEl = document.getElementById('dataset-date-utc');
@@ -866,26 +1073,17 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         if (dateUtcEl) dateUtcEl.textContent = (metadata && metadata.date_utc) || '-';
     }
 
-    /**
-     * 데이터셋 로드 — 기존 엔진/레전드 파기 후 신규 bin+json 로드 → 시각화
-     * (데이터셋 전환 시 호출, 최초 부팅 시 '8km' 로드)
-     */
-    async function loadDataset(key) {
+    async function loadDataset(key, skipFlyTo = false) {
         if (!viewer) return;
         const ds = DATASETS[key];
-        if (!ds) {
-            console.error("알 수 없는 데이터셋:", key);
-            return;
-        }
+        if (!ds) return;
 
         const statusEl = document.getElementById('dataset-status');
         if (statusEl) statusEl.textContent = `${ds.label} 로딩 중...`;
 
-        // dimmed 오버레이 + 스피너 표시
         showLoadingOverlay(`${ds.label} 로딩 중...`);
 
         try {
-            // 1. 기존 엔진/레전드/격자 파기 (데이터셋 전환 시 프리미티브/DOM 정리)
             if (windEngine) { windEngine.destroy(); windEngine = null; }
             if (legendBox) { legendBox.destroy(); legendBox = null; }
             if (gridVisualizer) { gridVisualizer.destroy(); gridVisualizer = null; }
@@ -893,7 +1091,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             window.legendBoxInstance = null;
             window.gridVisualizer = null;
 
-            // 2. 데이터 로드 (캐시 히트 시 fetch 스킵)
             let metadata, binaryData;
             if (datasetCache[key]) {
                 metadata = datasetCache[key].metadata;
@@ -908,42 +1105,14 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 datasetCache[key] = { metadata, binaryData };
             }
 
-            // 화면 중앙 하단: 선택된 데이터셋 메타데이터(file_name, date_utc) 실시간 갱신
             updateDatasetInfoPanel(metadata);
 
-            // Cesium 시계를 데이터셋의 date_utc에 동기화 — 태양 위치/하늘 색을 해당 시각으로 재현
             if (metadata && metadata.date_utc) {
                 const date = Cesium.JulianDate.fromDate(new Date(metadata.date_utc));
                 viewer.clock.currentTime = date;
-                viewer.clock.shouldAnimate = false; // 시간 고정 (정지 프레임)
+                viewer.clock.shouldAnimate = false;
             }
 
-            // 3. 8km 격자: 체크박스 상태 및 UI 숨김 (엔진 생성 전 적용)
-            // const is8km = (key === '8km');
-            // const boxFrameCb = document.getElementById('toggle-box-frame');
-            // const allSlicesCb = document.getElementById('toggle-all-slices');
-            // const toggleX = document.getElementById('toggle-x');
-            // const toggleY = document.getElementById('toggle-y');
-            // const toggleZ = document.getElementById('toggle-z');
-
-            // if (boxFrameCb) boxFrameCb.checked = !is8km;
-            // if (allSlicesCb) {
-            //     allSlicesCb.checked = !is8km;
-            //     allSlicesCb.disabled = is8km;
-            // }
-            // if (is8km) {
-            //     if (toggleX) toggleX.checked = false;
-            //     if (toggleY) toggleY.checked = false;
-            //     if (toggleZ) toggleZ.checked = false;
-            // }
-
-            // const sections = ['section-box-frame', 'section-slice-group'];
-            // sections.forEach(id => {
-            //     const el = document.getElementById(id);
-            //     if (el) el.style.display = is8km ? 'none' : '';
-            // });
-
-            // 4. 신규 엔진/레전드 생성
             windEngine = new GpuParticleEngine(viewer, metadata, binaryData);
             window.particleEngine = windEngine;
 
@@ -955,21 +1124,17 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             legendBox.init();
             window.legendBoxInstance = legendBox;
 
-            // 초기 체크박스 상태 동기화
             applyLegendVisibility();
 
-            // 바람장 레이어 가시성 동기화
             if (toggleLayerLow) windEngine.setLayerVisibility('low', toggleLayerLow.checked);
             if (toggleLayerMid) windEngine.setLayerVisibility('mid', toggleLayerMid.checked);
             if (toggleLayerHigh) windEngine.setLayerVisibility('high', toggleLayerHigh.checked);
 
-            // 바람 성분 필터 동기화 (u/v/w 토글 + w 증폭 게인)
             if (toggleCompU) windEngine.setComponentVisibility('u', toggleCompU.checked);
             if (toggleCompV) windEngine.setComponentVisibility('v', toggleCompV.checked);
             if (toggleCompW) windEngine.setComponentVisibility('w', toggleCompW.checked);
             if (compWGainSlider) windEngine.setComponentGain('w', parseInt(compWGainSlider.value, 10));
 
-            // 고도 과장 배율 유지: 엔진 재생성 시 슬라이더 현재값 재적용
             const hsSlider = document.getElementById('height-scale');
             if (hsSlider) {
                 const hsVal = parseFloat(hsSlider.value);
@@ -977,7 +1142,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 if (legendBox) legendBox.updateHeightScale(hsVal);
             }
 
-            // 5. 격자 시각화 생성 + UI 상태 동기화
             gridVisualizer = new GridVisualizer(viewer, metadata);
             window.gridVisualizer = gridVisualizer;
             const gridModeRadio = document.querySelector('input[name="grid-mode"]:checked');
@@ -988,14 +1152,12 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             const gridToggle = document.getElementById('toggle-grid');
             gridVisualizer.setShow(gridToggle ? gridToggle.checked : false);
 
-            // 풍속 필터 유지: 엔진 재생성 시 슬라이더 현재값 재적용
             if (speedFilterMin && speedFilterMax) {
                 const sfMin = parseInt(speedFilterMin.value, 10);
                 const sfMax = parseInt(speedFilterMax.value, 10);
                 windEngine.setSpeedFilter(sfMin, sfMax);
             }
 
-            // 나선(사이클론) 설정 유지: 엔진 재생성 시 슬라이더 현재값 재적용
             if (typeof spiralToggle !== 'undefined' && spiralToggle) {
                 windEngine.setSpiral(
                     spiralToggle.checked,
@@ -1005,11 +1167,9 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 );
             }
 
-            // JS에서 정의된 컬러맵과 설정값으로 HTML 범례 스타일 및 눈금 자동 갱신
             updateHtmlLegendFromEngine(windEngine);
 
-            // 데이터셋별 카메라 포지션 flyTo
-            if (ds.camera && viewer.camera) {
+            if (!skipFlyTo && ds.camera && viewer.camera) {
                 viewer.camera.flyTo({
                     destination: Cesium.Cartesian3.fromDegrees(
                         ds.camera.destination.lon,
@@ -1029,8 +1189,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             if (statusEl) {
                 statusEl.textContent = `${ds.label} (${metadata.iCount}×${metadata.jCount}×${metadata.levelCount})`;
             }
-            // 엔진 생성은 동기 처리라 스피너 애니메이션이 멈출 수 있음 →
-            // 다음 프레임에서 오버레이를 숨겨 "뻑" 방지
             requestAnimationFrame(() => requestAnimationFrame(hideLoadingOverlay));
         } catch (err) {
             console.error("바람 데이터 로드 실패:", err);
@@ -1039,7 +1197,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         }
     }
 
-    // postRender 리스너는 1회만 등록 (windEngine 변수 참조로 데이터셋 전환 자동 반영)
     if (viewer) {
         viewer.scene.postRender.addEventListener(() => {
             if (windEngine && windEngine.isReady) {
@@ -1048,10 +1205,8 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     }
 
-    // 최초 부팅: 디폴트 데이터셋(8km) 로드
     loadDataset('8km');
 
-    // 데이터셋 선택 드롭다운
     const datasetSelect = document.getElementById('dataset-select');
     if (datasetSelect) {
         datasetSelect.addEventListener('change', (e) => {
@@ -1059,8 +1214,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     }
 
-    // Home 버튼 인터셉트: Cesium 기본 flyHome(지구 전체 뷰) 대신
-    // 현재 선택된 데이터셋의 디폴트 카메라로 이동
     if (viewer) {
         viewer.camera.flyHome = function () {
             const ds = DATASETS[currentDatasetKey];
@@ -1079,13 +1232,11 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                     duration: 2
                 });
             } else {
-                // 데이터셋 정보 부재 시 Cesium 기본 동작으로 폴백
                 Cesium.Camera.prototype.flyHome.call(this);
             }
         };
     }
 
-    // 베이스맵 선택 드롭다운 — imagery layer 교체
     const baseMapSelect = document.getElementById('base-map-select');
     if (baseMapSelect && viewer) {
         baseMapSelect.addEventListener('change', (e) => {
@@ -1101,7 +1252,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     }
 
-    // 슬라이더 및 체크박스 제어 유틸 함수 (안전성 강화)
+    // 슬라이더 및 체크박스 제어 유틸 함수
     const sliderX = document.getElementById('slice-x');
     const sliderY = document.getElementById('slice-y');
     const sliderZ = document.getElementById('slice-z');
@@ -1171,7 +1322,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     if (toggleBoxFrame) toggleBoxFrame.addEventListener('change', applyLegendVisibility);
     if (toggleLegendText) toggleLegendText.addEventListener('change', applyLegendVisibility);
 
-    // 고도 과장 배율 슬라이더
     if (heightScaleSlider) {
         heightScaleSlider.addEventListener('input', (e) => {
             const val = parseInt(e.target.value, 10);
@@ -1190,9 +1340,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     }
 
-    // ==========================================
-    // 격자 시각화: 마스터 토글 + 모드(지면 단면 / 24레벨) 선택
-    // ==========================================
+    // 격자 시각화
     const gridToggle = document.getElementById('toggle-grid');
     const gridModeRadios = document.querySelectorAll('input[name="grid-mode"]');
 
@@ -1208,7 +1356,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     });
 
-    // 격자 묶음 (step) 슬라이더
     const gridStepSlider = document.getElementById('grid-step-slider');
     const gridStepVal = document.getElementById('grid-step-val');
     if (gridStepSlider) {
@@ -1219,7 +1366,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     }
 
-    // 바람장 레이어 (하층/중층/상층) 체크박스
+    // 바람장 레이어
     function applyLayerVisibility() {
         if (!window.particleEngine) return;
         if (toggleLayerLow) window.particleEngine.setLayerVisibility('low', toggleLayerLow.checked);
@@ -1230,7 +1377,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     if (toggleLayerMid) toggleLayerMid.addEventListener('change', applyLayerVisibility);
     if (toggleLayerHigh) toggleLayerHigh.addEventListener('change', applyLayerVisibility);
 
-    // 바람 성분 필터 (u/v/w) 체크박스 + w 증폭 게인 슬라이더
+    // 바람 성분 필터
     function applyComponentVisibility() {
         if (!window.particleEngine) return;
         if (toggleCompU) window.particleEngine.setComponentVisibility('u', toggleCompU.checked);
@@ -1248,9 +1395,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     }
 
-    // ==========================================
-    // 나선(사이클론) 표현: on/off 토글 + 시작풍속/반경/회전수 슬라이더
-    // ==========================================
+    // 나선 강조
     const spiralToggle = document.getElementById('toggle-spiral');
     const spiralOptions = document.getElementById('spiral-options');
     const spiralThresholdSlider = document.getElementById('spiral-threshold');
@@ -1313,19 +1458,14 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     }
     updateSpiralUI();
 
-    // ==========================================
-    // 풍속 필터: 듀얼 슬라이더(min/max) + 풍속 등급 라디오
-    // - 라디오 선택 → 슬라이더가 해당 구간으로 자동 이동
-    // - 슬라이더 이동 → 라디오가 일치하는 구간으로 자동 선택 (없으면 해제)
-    // ==========================================
-    const SPEED_FILTER_MAX = 70; // WIND_COLOR_MAP 상한 (m/s)
+    // 풍속 필터
+    const SPEED_FILTER_MAX = 70;
     const speedFilterMin = document.getElementById('speed-filter-min');
     const speedFilterMax = document.getElementById('speed-filter-max');
     const speedFilterTrack = document.getElementById('speed-filter-track');
     const speedFilterLabel = document.getElementById('speed-filter-label');
     const speedFilterRadios = document.querySelectorAll('input[name="speed-filter-preset"]');
 
-    // 풍속 등급 프리셋: 필터는 정확한 경계값 사용, 슬라이더는 step(5) 눈금에 스냅
     const SPEED_PRESETS = {
         all:    { min: 0,  max: 70,  label: '전체' },
         light:  { min: 0,  max: 5,   label: '미풍' },
@@ -1345,7 +1485,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         const min = parseInt(speedFilterMin.value, 10);
         const max = parseInt(speedFilterMax.value, 10);
 
-        // 트랙 하이라이트: [min, max] 구간만 강조
         if (speedFilterTrack) {
             const left = (min / SPEED_FILTER_MAX) * 100;
             const right = (Math.min(max, SPEED_FILTER_MAX) / SPEED_FILTER_MAX) * 100;
@@ -1360,7 +1499,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         applySpeedFilter(min, max);
     }
 
-    // 슬라이더 값 → 일치하는 프리셋 라디오 자동 선택 (없으면 모두 해제)
     function syncSpeedFilterRadio() {
         const min = parseInt(speedFilterMin.value, 10);
         const max = parseInt(speedFilterMax.value, 10);
@@ -1374,7 +1512,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         speedFilterRadios.forEach(r => { r.checked = (r.value === matched); });
     }
 
-    // min/max 크로스 방지: min은 max 이하, max는 min 이상으로 클램프
     function clampSpeedFilterSliders() {
         let min = parseInt(speedFilterMin.value, 10);
         let max = parseInt(speedFilterMax.value, 10);
@@ -1403,7 +1540,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     }
 
-    // 라디오 선택 → 슬라이더 자동 이동 (필터는 정확한 경계값 적용)
     speedFilterRadios.forEach(radio => {
         radio.addEventListener('change', () => {
             if (!radio.checked) return;
@@ -1415,8 +1551,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     });
 
-
-    // 환경 조명 체크박스: 하늘 대기 / 지구 조명 (디폴트 모두 해제)
     const toggleSkyAtmosphere = document.getElementById('toggle-sky-atmosphere');
     const toggleEnableLighting = document.getElementById('toggle-enable-lighting');
 
@@ -1430,6 +1564,306 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             viewer.scene.globe.enableLighting = e.target.checked;
         });
     }
+
+/* =========================================================
+       2. 브라우저 로컬 스토리지 기반 카메라 + 제어 셋팅 북마크 (최대 5개)
+    ========================================================= */
+    const BOOKMARK_STORAGE_KEY = 'cesium_wind_bookmarks';
+    const MAX_BOOKMARKS = 5;
+
+    // 현재 화면 및 제어 패널 UI 상태 전체를 캡처하는 함수 (nextIndex 파라미터 추가)
+    function captureCurrentState(nextIndex = 1) {
+        if (!viewer) return null;
+
+        const cam = viewer.camera;
+        const camState = {
+            position: {
+                x: cam.position.x,
+                y: cam.position.y,
+                z: cam.position.z
+            },
+            heading: cam.heading,
+            pitch: cam.pitch,
+            roll: cam.roll
+        };
+
+        const gridModeRadio = document.querySelector('input[name="grid-mode"]:checked');
+        const speedPresetRadio = document.querySelector('input[name="speed-filter-preset"]:checked');
+
+        const uiState = {
+            dataset: datasetSelect ? datasetSelect.value : '8km',
+            baseMap: baseMapSelect ? baseMapSelect.value : 'esri-satellite',
+            heightScale: heightScaleSlider ? heightScaleSlider.value : "30",
+            boxFrame: toggleBoxFrame ? toggleBoxFrame.checked : false,
+            legendText: toggleLegendText ? toggleLegendText.checked : true,
+            skyAtmosphere: toggleSkyAtmosphere ? toggleSkyAtmosphere.checked : false,
+            enableLighting: toggleEnableLighting ? toggleEnableLighting.checked : true,
+            
+            // 단면도
+            sliceX: sliderX ? sliderX.value : "0",
+            sliceY: sliderY ? sliderY.value : "100",
+            sliceZ: sliderZ ? sliderZ.value : "0",
+            toggleX: toggleX ? toggleX.checked : false,
+            toggleY: toggleY ? toggleY.checked : false,
+            toggleZ: toggleZ ? toggleZ.checked : false,
+            toggleAllSlices: toggleAllSlices ? toggleAllSlices.checked : true,
+
+            // 격자
+            toggleGrid: gridToggle ? gridToggle.checked : true,
+            gridMode: gridModeRadio ? gridModeRadio.value : 'levels',
+            gridStep: gridStepSlider ? gridStepSlider.value : "1200",
+
+            // 바람장 레이어
+            layerLow: toggleLayerLow ? toggleLayerLow.checked : true,
+            layerMid: toggleLayerMid ? toggleLayerMid.checked : true,
+            layerHigh: toggleLayerHigh ? toggleLayerHigh.checked : true,
+
+            // 성분 필터
+            compU: toggleCompU ? toggleCompU.checked : true,
+            compV: toggleCompV ? toggleCompV.checked : true,
+            compW: toggleCompW ? toggleCompW.checked : true,
+            compWGain: compWGainSlider ? compWGainSlider.value : "101",
+
+            // 풍속 필터
+            speedMin: speedFilterMin ? speedFilterMin.value : "0",
+            speedMax: speedFilterMax ? speedFilterMax.value : "70",
+            speedPreset: speedPresetRadio ? speedPresetRadio.value : 'all',
+
+            // 나선 강조
+            spiralToggle: spiralToggle ? spiralToggle.checked : false,
+            spiralThreshold: spiralThresholdSlider ? spiralThresholdSlider.value : "20",
+            spiralRadius: spiralRadiusSlider ? spiralRadiusSlider.value : "10",
+            spiralTurns: spiralTurnsSlider ? spiralTurnsSlider.value : "0.5"
+        };
+
+        return {
+            id: Date.now(),
+            name: `View ${nextIndex}`, // View 1 ~ View 5 형식으로 변경
+            time: new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            camera: camState,
+            ui: uiState
+        };
+    }
+
+    // 로컬 스토리지 데이터 로드 및 저장
+    function getBookmarks() {
+        try {
+            const data = localStorage.getItem(BOOKMARK_STORAGE_KEY);
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            console.error("북마크 로드 실패:", e);
+            return [];
+        }
+    }
+
+    function saveBookmarks(bookmarks) {
+        try {
+            localStorage.setItem(BOOKMARK_STORAGE_KEY, JSON.stringify(bookmarks));
+            renderBookmarks();
+        } catch (e) {
+            console.error("북마크 저장 실패:", e);
+        }
+    }
+
+    // 저장된 북마크 상태 복원 적용 함수
+    async function restoreState(bookmark) {
+        if (!bookmark || !viewer) return;
+
+        const ui = bookmark.ui;
+
+        // 1. 데이터셋 교체
+        if (ui.dataset && ui.dataset !== currentDatasetKey) {
+            datasetSelect.value = ui.dataset;
+            await loadDataset(ui.dataset, true);
+        }
+
+        // 2. 베이스맵 복원
+        if (baseMapSelect && ui.baseMap && baseMapSelect.value !== ui.baseMap) {
+            baseMapSelect.value = ui.baseMap;
+            baseMapSelect.dispatchEvent(new Event('change'));
+        }
+
+        // 3. 카메라 이동
+        if (bookmark.camera) {
+            const c = bookmark.camera;
+            viewer.camera.flyTo({
+                destination: new Cesium.Cartesian3(c.position.x, c.position.y, c.position.z),
+                orientation: {
+                    heading: c.heading,
+                    pitch: c.pitch,
+                    roll: c.roll
+                },
+                duration: 1.5
+            });
+        }
+
+        // 4. UI 및 바람 제어값 적용
+        if (heightScaleSlider) {
+            heightScaleSlider.value = ui.heightScale;
+            heightScaleSlider.dispatchEvent(new Event('input'));
+        }
+
+        if (toggleBoxFrame) { toggleBoxFrame.checked = ui.boxFrame; }
+        if (toggleLegendText) { toggleLegendText.checked = ui.legendText; }
+        applyLegendVisibility();
+
+        if (toggleSkyAtmosphere) {
+            toggleSkyAtmosphere.checked = ui.skyAtmosphere;
+            toggleSkyAtmosphere.dispatchEvent(new Event('change'));
+        }
+        if (toggleEnableLighting) {
+            toggleEnableLighting.checked = ui.enableLighting;
+            toggleEnableLighting.dispatchEvent(new Event('change'));
+        }
+
+        // 단면도
+        if (sliderX) sliderX.value = ui.sliceX;
+        if (sliderY) sliderY.value = ui.sliceY;
+        if (sliderZ) sliderZ.value = ui.sliceZ;
+        updateEngineClip();
+
+        if (toggleX) { toggleX.checked = ui.toggleX; toggleX.dispatchEvent(new Event('change')); }
+        if (toggleY) { toggleY.checked = ui.toggleY; toggleY.dispatchEvent(new Event('change')); }
+        if (toggleZ) { toggleZ.checked = ui.toggleZ; toggleZ.dispatchEvent(new Event('change')); }
+        if (toggleAllSlices) { toggleAllSlices.checked = ui.toggleAllSlices; }
+
+        // 격자 시각화
+        if (gridToggle) {
+            gridToggle.checked = ui.toggleGrid;
+            gridToggle.dispatchEvent(new Event('change'));
+        }
+        if (ui.gridMode) {
+            const r = document.querySelector(`input[name="grid-mode"][value="${ui.gridMode}"]`);
+            if (r) { r.checked = true; r.dispatchEvent(new Event('change')); }
+        }
+        if (gridStepSlider) {
+            gridStepSlider.value = ui.gridStep;
+            gridStepSlider.dispatchEvent(new Event('input'));
+        }
+
+        // 바람장 레이어
+        if (toggleLayerLow) toggleLayerLow.checked = ui.layerLow;
+        if (toggleLayerMid) toggleLayerMid.checked = ui.layerMid;
+        if (toggleLayerHigh) toggleLayerHigh.checked = ui.layerHigh;
+        applyLayerVisibility();
+
+        // 성분 필터
+        if (toggleCompU) toggleCompU.checked = ui.compU;
+        if (toggleCompV) toggleCompV.checked = ui.compV;
+        if (toggleCompW) toggleCompW.checked = ui.compW;
+        applyComponentVisibility();
+        if (compWGainSlider) {
+            compWGainSlider.value = ui.compWGain;
+            compWGainSlider.dispatchEvent(new Event('input'));
+        }
+
+        // 풍속 필터
+        if (speedFilterMin && speedFilterMax) {
+            speedFilterMin.value = ui.speedMin;
+            speedFilterMax.value = ui.speedMax;
+            updateSpeedFilterUI();
+            syncSpeedFilterRadio();
+        }
+
+        // 나선 효과
+        if (spiralToggle) { spiralToggle.checked = ui.spiralToggle; }
+        if (spiralThresholdSlider) { spiralThresholdSlider.value = ui.spiralThreshold; }
+        if (spiralRadiusSlider) { spiralRadiusSlider.value = ui.spiralRadius; }
+        if (spiralTurnsSlider) { spiralTurnsSlider.value = ui.spiralTurns; }
+        updateSpiralUI();
+        applySpiralSettings();
+    }
+
+    // 북마크 리스트 UI 렌더링
+    function renderBookmarks() {
+        const bookmarks = getBookmarks();
+        const listEl = document.getElementById('bookmark-list');
+        const countEl = document.getElementById('bookmark-count');
+
+        if (countEl) countEl.textContent = `(${bookmarks.length}/${MAX_BOOKMARKS})`;
+        if (!listEl) return;
+
+        if (bookmarks.length === 0) {
+            listEl.innerHTML = '<div class="empty-bookmark-msg">저장된 북마크가 없습니다.</div>';
+            return;
+        }
+
+        listEl.innerHTML = bookmarks.map(bm => `
+            <div class="bookmark-item" data-id="${bm.id}">
+                <div class="bookmark-info">
+                    <span class="bookmark-name">${bm.name}</span>
+                    <span class="bookmark-time">${bm.time}</span>
+                </div>
+                <button class="bookmark-del-btn" title="삭제">✕</button>
+            </div>
+        `).join('');
+
+        // 이벤트 바인딩
+        listEl.querySelectorAll('.bookmark-item').forEach(item => {
+            const id = parseInt(item.getAttribute('data-id'), 10);
+            
+            item.addEventListener('click', (e) => {
+                if (e.target.classList.contains('bookmark-del-btn')) return;
+                const bms = getBookmarks();
+                const targetBm = bms.find(b => b.id === id);
+                if (targetBm) restoreState(targetBm);
+            });
+
+            const delBtn = item.querySelector('.bookmark-del-btn');
+            if (delBtn) {
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const bms = getBookmarks().filter(b => b.id !== id);
+                    saveBookmarks(bms);
+                });
+            }
+        });
+    }
+
+    // 현재 상태 저장 버튼
+    const btnAddBookmark = document.getElementById('btn-add-bookmark');
+    if (btnAddBookmark) {
+        btnAddBookmark.addEventListener('click', () => {
+            const bookmarks = getBookmarks();
+            if (bookmarks.length >= MAX_BOOKMARKS) {
+                alert(`북마크는 최대 ${MAX_BOOKMARKS}개까지만 저장할 수 있습니다. 기존 북마크를 삭제 후 추가해 주세요.`);
+                return;
+            }
+
+            // 1~5 중 현재 사용 중인 View 번호 목록 추출
+            const usedIndexes = bookmarks.map(bm => {
+                const match = bm.name.match(/^View\s+(\d+)$/);
+                return match ? parseInt(match[1], 10) : null;
+            }).filter(Boolean);
+
+            // 1부터 5까지 빈 번호(사용되지 않은 가장 작은 번호) 탐색
+            let nextIndex = 1;
+            for (let i = 1; i <= MAX_BOOKMARKS; i++) {
+                if (!usedIndexes.includes(i)) {
+                    nextIndex = i;
+                    break;
+                }
+            }
+
+            const newState = captureCurrentState(nextIndex);
+            
+            if (newState) {
+                bookmarks.push(newState);
+
+                // View 1 ~ View 5 순서대로 깔끔하게 정렬하여 저장
+                bookmarks.sort((a, b) => {
+                    const numA = parseInt((a.name.match(/\d+/) || [0])[0], 10);
+                    const numB = parseInt((b.name.match(/\d+/) || [0])[0], 10);
+                    return numA - numB;
+                });
+
+                saveBookmarks(bookmarks);
+            }
+        });
+    }
+
+    // 최초 부팅 시 북마크 목록 초기화
+    renderBookmarks();
 </script>
 </body>
 </html>
