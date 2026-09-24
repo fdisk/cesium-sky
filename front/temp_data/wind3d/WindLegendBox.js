@@ -7,7 +7,7 @@ export class WindLegendBox {
         this.metadata = metadata;
         this.polylines = null;
         this.labelEntities = [];
-        this.heightScale = 20.0;
+        this.heightScale = 30.0;
     }
 
     init() {
@@ -108,9 +108,10 @@ export class WindLegendBox {
                     style: Cesium.LabelStyle.FILL_AND_OUTLINE,
                     fillColor: Cesium.Color.WHITE,
                     outlineColor: Cesium.Color.BLACK,
-                    outlineWidth: 2,
+                    outlineWidth: 0,
                     showBackground: true,
-                    backgroundColor: new Cesium.Color(0.06, 0.09, 0.16, 0.75),
+                    // backgroundColor: new Cesium.Color(0.06, 0.09, 0.16, 0.75),
+                    backgroundColor: new Cesium.Color(0.06, 0.09, 0.16, 0.0),
                     horizontalOrigin: Cesium.HorizontalOrigin.RIGHT,
                     verticalOrigin: Cesium.VerticalOrigin.CENTER,
                     pixelOffset: new Cesium.Cartesian2(-12, 0),
