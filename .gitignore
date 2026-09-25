@@ -45,6 +45,11 @@ __pycache__/
 .eggs/
 wheels/
 *.egg
+makeFakeFrames.py
+g576
+r030
+plans-with-ai
+api-only-ref.html
 
 # 가상환경
 venv/
