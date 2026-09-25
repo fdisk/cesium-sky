@@ -26,6 +26,7 @@ desktop.ini
 !.env.example
 *.pem
 *.key
+fix_rg.ps1
 
 # ---------- 로그 ----------
 *.log
