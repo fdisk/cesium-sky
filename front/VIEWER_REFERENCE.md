@@ -144,6 +144,10 @@ Cesium Viewer 생성 + UI 패널 + 엔진 부팅을 담당.
   - `bundle` 존재 시 타임랩스 번들 경로, 없으면 레거시 json/bin 경로
   - `cacheKey`: `datasetCache` 키 (model+initTime) — 레거시 데이터셋은 `key` 자체 사용
 - **데이터 캐시 (`datasetCache`)**: `{ metadata, binaryData, framePool?, loader?, bundle? }` 메모리 캐싱 → 3km ↔ 8km 전환 시 재다운로드 없음
+- **브라우저 번들 캐시 (`bundleCache`)**: `WindDataLoader.js`의 `BundleCache` 싱글턴 — 번들 `.bin.gz`를 브라우저 스토리지에 저장해 리프레시 시 재다운로드 생략 (3.5절 참조). `loadDataset()`은 `fetchOrCache()` 경유로 캐시 히트 시 네트워크 fetch 자체를 건너뜀
+- **캐시 상태 표시**: dataset-info-panel의 `cache` 항목 (`#dataset-cache-status`) — `updateCacheStatusDisplay(bundleUrl, fromCache)`가 `bundleCache.totalSize()`로 **앱이 저장한 전체 번들 캐시 총량 + 개수 + 상태** 표시 (예: `1.12 GB (2) hit`). 상태: `hit`(이번 로딩이 캐시에서) / `cached`(캐시에 존재하나 이번 로딩은 네트워크) / `network`. 캐시 삭제 후에도 남은 총량으로 갱신
+- **파일 크기 표시**: "데이터셋 선택" 라벨 우측 (`#dataset-file-size`) — `formatFileSize(bytes)`가 로딩한 파일(번들/bin) 크기를 휴먼리더블로 표시 (≥1GB → `x.xx GB`, ≥1MB → `x.x MB`, 그 외 `x KB`). `loadDataset()`이 분기별 `fileSize` 추적 (인메모리 히트 → `datasetCache` entry의 `fileSize`, 번들 → `loader.cacheStatus.size`, 레거시 → `binaryData.byteLength`) 후 갱신
+- **캐시 삭제 UI**: dataset-select 아래 **접힌 "▸ 캐시 관리" 토글** (`#cache-mgmt-toggle`)을 먼저 눌러야 버튼 2개가 표시됨 (실수 방지 UX — `#cache-mgmt-body` 기본 `display:none`). `#btn-cache-delete-current` (현재 데이터셋 캐시 삭제), `#btn-cache-delete-all` (전체 삭제, confirm 다이얼로그). `deleteBundleCache(scope)`가 브라우저 캐시 + 인메모리 `datasetCache` + `framePool`을 **연동 삭제** (인메모리만 남으면 "삭제했는데도 메모리에서 서빙" 불일치 방지)
 - **UI 패널** (`#slider-panel`): 데이터셋 드롭다운, **타임랩스 섹션** (재생/정지, 속도 0.25~2fps, 프레임 슬라이더, validTime UTC/KST 표시), 고도 과장 슬라이더(10~70x, 기본 20x), 베이스맵, 3D 박스/레벨 텍스트 토글, 격자 시각화, 바람장 레이어(하/중/상층), 풍속 필터(듀얼 슬라이더 + 등급 프리셋), 단면도(X/Y/Z), 환경 조명
 - **8km 특별 처리**: 3D 범위 박스 + 단면도 UI 자동 숨김 (`display: none`)
 - **엔진 부팅** (`loadDataset(key)`): stopTimelapse → destroy → cache/bundle/legacy fetch → info panel → clock sync → new Engine/Legend/Grid → `initTimelapseUI(!!framePool)` → UI 가시성 → legend update → camera flyTo
@@ -224,14 +228,26 @@ WIND_COLOR_MAP = [ {0: 회색}, {5: 시안}, {12: 파랑}, {20: 초록}, {30: �
 - 모드: `ground` (지면 단면 격자) / `levels` (24레벨 직육면체)
 - `heightScale = 20.0` (기본)
 
-### 3.5 `WindDataLoader.js` — 데이터 로더 + FramePool
+### 3.5 `WindDataLoader.js` — 데이터 로더 + BundleCache + FramePool
 
 - `load(jsonUrl, binUrl)` → `{ metadata, windDataArray }` — 레거시 단일 프레임
-- `loadBundle(bundleUrl)`: **단일 파일 전체 fetch** → 첫 `0x0A`(`'\n'`) 경계에서 헤더/멤버 영역 분리 → `TextDecoder` + `JSON.parse` → `this.bundle` / `this.frames` / `this.memberRegion`(헤더 이후 `Uint8Array` 서브어레이) 저장
+- `loadBundle(bundleUrl, onProgress?)`: `fetchOrCache()`로 **단일 파일 전체** 확보 (캐시 히트 시 네트워크 생략) → 첫 `0x0A`(`'\n'`) 경계에서 헤더/멤버 영역 분리 → `TextDecoder` + `JSON.parse` → `this.bundle` / `this.frames` / `this.memberRegion`(헤더 이후 `Uint8Array` 서브어레이) 저장. `this.cacheStatus = { fromCache }`로 히트 여부 노출, `onProgress`로 다운로드 진행률 콜백 (캐시 히트 시 즉시 100)
 - `restoreFrame(uint16, scale)`: uint16 → Float32 복원 (`min + uint16 * step`, 채널별 u/v/w/gph)
 - `loadFrame(idx)`: `memberRegion.slice(gzOffset, gzOffset+gzSize)` → `decompressGzip()` → `Uint16Array` → `restoreFrame` → `{ frameIndex, data, gphByLevel, validTime, ft }`
 - `decompressGzip(buffer)`: `DecompressionStream('gzip')` 우선, 미지원 브라우저는 **pako 2.1.0 UMD (jsdelivr CDN)** 동적 스크립트 주입 폴백
 - `create3DDataTexture(gl)`: WebGL2 `TEXTURE_3D` (RGBA32F) — 레거시 전용, 현행 미사용
+
+#### BundleCache (브라우저 번들 캐시)
+- `export class BundleCache` + `export const bundleCache = new BundleCache()` (모듈 싱글턴, view.html이 import)
+- **3모드 자동 선택** (`_init()`):
+  1. `cache-api` — Cache Storage (`caches.open('wind-bundle-v1')`). **secure context(https/localhost)에서만** 사용 가능
+  2. `indexeddb` — IndexedDB 폴백 (`wind-bundle-cache` v1, `meta`/`buffers` object store 2개). **내부망 `http://10.x.x.x`에서도 동작** (Cache API/SW는 non-secure context에서 불가)
+  3. `none` — 둘 다 불가 시 패스스루 (캐시 없이 fetch만)
+- `meta`/`buffers` 분리: `status(url)`은 `meta`만 조회 → 1GB 버퍼를 structured-clone하지 않고 캐시 여부/크기 확인
+- API: `get(url) → Response|null`, `put(url, response)` (QuotaExceededError 시 false 반환 — 쿼타 초과 시 그레이셜 디그레이드), `delete(url)`, `clear()`, `status(url) → {cached, size}`, `totalSize() → {totalSize, count}` (캐시된 모든 번들의 총 바이트 수 + 개수; cache-api는 `keys()`+`match()`, indexeddb는 `meta` 커서 순회), `estimate()`
+- **크기 측정**: 합성 `Response`는 `.size`가 항상 0 → `fetchOrCache`가 저장 시 `X-Bundle-Size` 헤더를 함께 기록하고, `_cacheEntrySize(res)`가 헤더 → `res.size` → 바디 읽기 순으로 크기 결정 (헤더 없는 구버전 캐시도 호환). indexeddb는 `meta.size` 사용
+- **무효화 전략**: URL에 `initTime` 포함 → 새 예보 = 새 URL = 자연 무효화. 동일 URL 재빌드 시 캐시명 버전 키 변경 (`wind-bundle-v1` → `v2`)
+- `fetchOrCache(url, onProgress, cache) → { bytes, fromCache }`: 캐시 히트 → `onProgress(100)` + 버퍼 반환 / 미스 → `Content-Length` 기반 스트리밍 진행률 fetch → `cache.put()` (실패는 console.warn만)
 
 #### FramePool (LRU 프레임 캐시)
 - `new FramePool(loader, capacity=5)` — `Map` 기반 LRU (삽입 순서 = LRU, hit 시 MRU 재삽입)
@@ -423,6 +439,7 @@ wind_bundle_<model>_<initTime>.bin.gz
 18. **gzip 디컴프레션**: `DecompressionStream('gzip')` 우선, 미지원 브라우저는 pako 2.1.0 UMD (jsdelivr CDN) 동적 스크립트 주입 폴백. 멀티 멤버 gzip 스트림 — 멤버 슬라이스 후 개별 디컴프레션.
 19. **`setFrame()` 재생성 패턴**: 프레임 전환 시 `binaryData`/`gphByLevel` 교체 후 `createParticlePrimitives()` + `updateSlicePlanes()` 재실행. `gphByLevel`은 유니폼 클로저(`() => self.gphByLevel`)로 새 배열 자동 반영.
 20. **cacheKey**: `ds.cacheKey || key`로 캐시 키 결정 — 번들 데이터셋은 `r030_2026092118` 식별자 사용, legacy는 기존 key. `datasetCache` 값에 `framePool`/`loader`/`bundle` 포함.
+21. **브라우저 번들 캐시 (fetchOrCache 추상화)**: 번들 `.bin.gz` 다운로드를 `fetchOrCache()`로 통일 — Cache API(secure context) → IndexedDB(내부망 http 폴백) → none 3모드. 리프레시 시 이미 받은 번들은 브라우저 스토리지에서 재사용 (566MB+ 재다운로드 제거). URL에 initTime 포함으로 새 예보는 자연 무효화. 쿼타 초과 시 put 실패를 잡아 그레이셜 디그레이드. 캐시 삭제 UI(현재/전체)는 인메모리 `datasetCache`+`framePool`과 연동 삭제.
 
 ---
 
@@ -441,7 +458,9 @@ wind_bundle_<model>_<initTime>.bin.gz
 | 9 | 프레임 전환 시 `createParticlePrimitives()` + `updateSlicePlanes()` 전체 재실행 (CPU 비용) — 재생 중 `busy` 가드로 직렬화 | `GpuParticleEngine.setFrame()` |
 | 10 | pako 폴백은 CDN 의존 — 오프라인 환경에서는 `DecompressionStream` 미지원 브라우저가 gzip 디컴프레션 불가 | `WindDataLoader.loadPako()` |
 | 11 | FramePool 용량 5 고정 — 프레임 수 증가 시 캐시 미스율 상승 가능 (용량 조정 필요 시 `new FramePool(loader, N)`) | `view.html` |
-| 12 | serve.py는 Range 요청 미지원 → 번들은 **전체 파일 fetch** (5프레임: r030 566MB / g576 460MB, 초기 로딩 1회) | `serve.py` / `WindDataLoader.loadBundle()` |
+| 12 | serve.py는 Range 요청 미지원 → 번들은 **전체 파일 fetch** (5프레임: r030 566MB / g576 460MB, 초기 로딩 1회). **리프레시 재다운로드는 `bundleCache`(Cache API/IndexedDB)로 제거됨** — 1회 다운로드 후 브라우저 스토리지 재사용 | `serve.py` / `WindDataLoader.loadBundle()` / `BundleCache` |
+| 13 | 브라우저 스토리지 쿼타 부족 시 번들 캐시 저장 실패 (console.warn 후 캐시 없이 동작 — 그레이셜 디그레이드). 1GB+ 번들 2종 동시 캐싱은 쿼타 여유 필요 | `BundleCache.put()` |
+| 14 | Cache API/SW는 non-secure context(`http://10.x.x.x`)에서 불가 → IndexedDB 폴백이 필수. `bundleCache.mode`로 현재 모드 확인 가능 | `BundleCache._init()` |
 
 ### 6.1 사고 기록: int16 오버플로 데이터 손상 (2026-09)
 
@@ -471,6 +490,9 @@ wind_bundle_<model>_<initTime>.bin.gz
 - [ ] 번들 데이터셋 추가 시 `DATASETS`에 `bundle` + `cacheKey` 필드 + 드롭다운 `<option>` + `nc2bin.py` `JOBS` 갱신
 - [ ] 번들 헤더 스키마 변경 시 `WindDataLoader.loadBundle()`/`restoreFrame()` + `view.html` 번들→엔진 메타데이터 브리지(`range.gph`, `gphByLevel`) 함께 갱신
 - [ ] 프레임 재생 로직 변경 시 `FramePool` LRU/inflight/prefetchAround 계약 유지, `setFrame()` 호출 후 `prefetchAround()` 호출
+- [ ] 번들 다운로드 경로 변경 시 `fetchOrCache()` 추상화 유지 (Cache API → IndexedDB 폴백 3모드) — `loadBundle()`은 직접 fetch 금지
+- [ ] 캐시 무효화: 새 initTime = 새 URL(자연 무효화). 동일 URL 재빌드 시 `BundleCache` 캐시명 버전 키(`wind-bundle-v1`) 갱신
+- [ ] 캐시 삭제 UI(`deleteBundleCache`)는 브라우저 캐시 + 인메모리 `datasetCache` + `framePool` 연동 삭제 유지
 - [ ] 타임랩스 UI는 번들 데이터셋(`framePool` 존재)일 때만 표시 — `initTimelapseUI(!!framePool)`
 - [ ] 데이터셋 전환 시 `destroy()` → 신규 생성 패턴 유지
 - [ ] 코드 변경 시 이 문서(`VIEWER_REFERENCE.md`)도 함께 갱신

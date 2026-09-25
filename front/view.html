@@ -432,38 +432,73 @@
     /* 화면 중앙 하단: 선택된 데이터셋 메타데이터 */
     #dataset-info-panel {
         position: absolute;
-        bottom: 20px;
+        bottom: 0;
         left: 50%;
         transform: translateX(-50%);
         z-index: 999;
-        background: rgba(15, 23, 42, 0.9);
-        padding: 10px 16px;
-        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.92);
+        backdrop-filter: blur(6px);
+        padding: 5px 12px;
+        border-radius: 8px 8px 0 0;
         color: #fff;
         font-family: sans-serif;
         border: 1px solid #334155;
+        border-bottom: none;
         display: flex;
-        gap: 24px;
+        gap: 14px;
         align-items: center;
-        min-width: 260px;
+        min-width: 200px;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* 인디케이터 패널 접힘: 아래로 내려가며 탭만 노출 */
+    #dataset-info-panel.collapsed {
+        transform: translateX(-50%) translateY(100%);
+    }
+
+    /* 인디케이터 패널 접기/펼치기 탭 버튼 */
+    #toggle-info-btn {
+        position: absolute;
+        top: -22px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 48px;
+        height: 22px;
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid #334155;
+        border-bottom: none;
+        border-radius: 6px 6px 0 0;
+        color: #38bdf8;
+        font-size: 10px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+    }
+    #toggle-info-btn:hover {
+        background: #1e293b;
+        color: #7dd3fc;
     }
 
     #dataset-info-panel .info-item {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 1px;
     }
 
     #dataset-info-panel .info-title {
-        font-size: 11px;
+        font-size: 10px;
         color: #38bdf8;
         font-weight: bold;
+        white-space: nowrap;
     }
 
     #dataset-info-panel .info-value {
-        font-size: 11px;
+        font-size: 10px;
         color: #f8fafc;
-        word-break: break-all;
+        white-space: nowrap;
     }
 
     /* 데이터셋 로딩 중: dimmed 오버레이 + 스피너 */
@@ -513,17 +548,17 @@
 </div>
 
 <div id="dataset-info-panel">
+    <button id="toggle-info-btn" title="인디케이터 접기/펼치기">▾</button>
     <div class="info-item">
         <span class="info-title">file</span>
         <span class="info-value" id="dataset-file-name">-</span>
     </div>
     <div class="info-item">
-        <span class="info-title">date (UTC)</span>
-        <span class="info-value" id="dataset-date-utc">-</span>
-    </div>
-    <div class="info-item">
-        <span class="info-title">date (KST)</span>
-        <span class="info-value" id="dataset-date-kst">-</span>
+        <span class="info-title" style="display:flex; align-items:center; gap:4px;">
+            date
+            <button id="date-tz-toggle" style="background:#1e293b; color:#38bdf8; border:1px solid #475569; border-radius:3px; font-size:9px; padding:0 4px; cursor:pointer; line-height:14px;">UTC</button>
+        </span>
+        <span class="info-value" id="dataset-date" style="font-family:Consolas, 'Courier New', monospace;">-</span>
     </div>
     <div class="info-item">
         <span class="info-title" style="display:flex; align-items:center; gap:4px;">
@@ -531,6 +566,10 @@
             <button id="hf-tz-toggle" style="background:#1e293b; color:#38bdf8; border:1px solid #475569; border-radius:3px; font-size:9px; padding:0 4px; cursor:pointer; line-height:14px;">UTC</button>
         </span>
         <span class="info-value" id="dataset-hf" style="font-family:Consolas, 'Courier New', monospace;">-</span>
+    </div>
+    <div class="info-item">
+        <span class="info-title">cache</span>
+        <span class="info-value" id="dataset-cache-status" style="font-family:Consolas, 'Courier New', monospace;">-</span>
     </div>
 </div>
 
@@ -578,11 +617,23 @@
 
         <!-- 데이터셋 선택 -->
         <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
-            <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">데이터셋 선택</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
+                <span>데이터셋 선택</span>
+                <span id="dataset-file-size" title="로딩한 파일 크기" style="font-size:10px; color:#94a3b8; font-family:Consolas, 'Courier New', monospace;">-</span>
+            </div>
             <select id="dataset-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
                 <option value="3km">3km 격자 (r030 동아시아)</option>
                 <option value="8km" selected>8km 격자 (g576 동아시아)</option>
             </select>
+            <div style="margin-top:4px;">
+                <span id="cache-mgmt-toggle" style="font-size:9px; color:#64748b; cursor:pointer; user-select:none;">▸ 캐시 관리</span>
+                <div id="cache-mgmt-body" style="display:none; margin-top:3px;">
+                    <div style="display:flex; gap:4px;">
+                        <button id="btn-cache-delete-current" title="현재 데이터셋의 브라우저 캐시 삭제" style="flex:1; background:#1e293b; color:#f87171; border:1px solid #475569; border-radius:4px; font-size:10px; padding:2px 4px; cursor:pointer;">🗑 현재 캐시 삭제</button>
+                        <button id="btn-cache-delete-all" title="전체 브라우저 캐시 삭제" style="flex:1; background:#1e293b; color:#f87171; border:1px solid #475569; border-radius:4px; font-size:10px; padding:2px 4px; cursor:pointer;">🗑 전체 캐시 삭제</button>
+                    </div>
+                </div>
+            </div>
             <div id="dataset-status" style="font-size:9px; color:#94a3b8; margin-top:3px;"></div>
         </div>
 
@@ -594,12 +645,11 @@
             <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
                 <button id="tl-play" style="width:28px; height:22px; background:#1e293b; color:#fff; border:1px solid #475569; border-radius:4px; font-size:11px; cursor:pointer;">▶</button>
                 <select id="tl-speed" style="background:#1e293b; color:#fff; border:1px solid #475569; padding:2px; border-radius:4px; font-size:10px;">
-                    <option value="0.1" selected>0.1 fps</option>
-                    <option value="0.2">0.2 fps</option>
-                    <option value="0.5">0.5 fps</option>
-                    <option value="0.5">0.5 fps</option>
+                    <option value="0.1">0.1 fps</option>
+                    <option value="0.25">0.25 fps</option>
+                    <option value="0.5" selected>0.5 fps</option>
+                    <option value="0.75">0.75 fps</option>
                     <option value="1">1 fps</option>
-                    <option value="2">2 fps</option>
                 </select>
                 <span id="tl-frame-label" style="margin-left:auto; font-size:10px; font-family:Consolas, 'Courier New', monospace; display:flex; align-items:baseline; gap:4px;">
                     <span id="tl-frame-offset" style="min-width:4ch; text-align:right; color:#94a3b8;"></span>
@@ -909,7 +959,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     import { GpuParticleEngine } from '/temp_data/wind3d/GpuParticleEngine.js';
     import { WindLegendBox } from '/temp_data/wind3d/WindLegendBox.js';
     import { GridVisualizer } from '/temp_data/wind3d/GridVisualizer.js';
-    import { WindDataLoader, FramePool } from '/temp_data/wind3d/WindDataLoader.js';
+    import { WindDataLoader, FramePool, bundleCache } from '/temp_data/wind3d/WindDataLoader.js';
 
     const CAMERA = {
         destination: { lon: 128.666575, lat: 23.075479, height: 1618355 },
@@ -1138,26 +1188,102 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         }
     }   
 
+    // date 항목: UTC/KST 토글 상태 (hf와 독립)
+    let dateTz = 'UTC';
+    let lastDateUtc = null;
+
+    function formatDatasetDate(dateUtc, tz) {
+        if (!dateUtc) return '-';
+        const d = new Date(dateUtc);
+        if (isNaN(d)) return '-';
+        const pad = n => String(n).padStart(2, '0');
+        if (tz === 'KST') {
+            const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+            return `${kst.getUTCFullYear()}-${pad(kst.getUTCMonth() + 1)}-${pad(kst.getUTCDate())} ${pad(kst.getUTCHours())}:${pad(kst.getUTCMinutes())}:${pad(kst.getUTCSeconds())}`;
+        }
+        return `${d.toISOString().slice(0, 10)} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    }
+
+    function renderDatasetDate() {
+        const el = document.getElementById('dataset-date');
+        if (el) el.textContent = formatDatasetDate(lastDateUtc, dateTz);
+    }
+
     function updateDatasetInfoPanel(metadata) {
         const fileNameEl = document.getElementById('dataset-file-name');
-        const dateUtcEl = document.getElementById('dataset-date-utc');
-        const dateKstEl = document.getElementById('dataset-date-kst');
         if (fileNameEl) fileNameEl.textContent = (metadata && metadata.file_name) || '-';
-        if (dateUtcEl) dateUtcEl.textContent = (metadata && metadata.date_utc) || '-';
-        if (dateKstEl) {
-            const dateUtc = metadata && metadata.date_utc;
-            if (dateUtc) {
-                const d = new Date(dateUtc);
-                if (!isNaN(d)) {
-                    const kst = new Date(d.getTime() + 9 * 3600 * 1000);
-                    const pad = n => String(n).padStart(2, '0');
-                    dateKstEl.textContent = `${kst.getUTCFullYear()}-${pad(kst.getUTCMonth() + 1)}-${pad(kst.getUTCDate())} ${pad(kst.getUTCHours())}:${pad(kst.getUTCMinutes())}:${pad(kst.getUTCSeconds())}`;
-                } else {
-                    dateKstEl.textContent = '-';
-                }
+        lastDateUtc = (metadata && metadata.date_utc) || null;
+        renderDatasetDate();
+    }
+
+    /**
+     * 브라우저 캐시 상태 표시 (dataset-info-panel의 cache 항목)
+     * @param {string|null} bundleUrl  캐시 상태 조회 대상 번들 URL (null이면 '-' 표시)
+     * @param {boolean} [fromCache]    이번 로딩이 캐시 히트였는지
+     */
+    function formatFileSize(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return '-';
+        if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        return (bytes / 1024).toFixed(0) + ' KB';
+    }
+
+    /**
+     * 캐시 상태 표시: dataset-info-panel의 cache 항목 갱신
+     * 표시 형식: `전체 캐시 총량 (개수) 상태` — 예: `1.12 GB (2) hit`
+     * 상태: hit(이번 로딩이 캐시에서) / cached(캐시에 존재하나 이번 로딩은 네트워크) / network
+     */
+    async function updateCacheStatusDisplay(bundleUrl, fromCache) {
+        const el = document.getElementById('dataset-cache-status');
+        if (!el) return;
+        if (!bundleUrl) { el.textContent = '-'; return; }
+        try {
+            const [st, tot] = await Promise.all([
+                bundleCache.status(bundleUrl),
+                bundleCache.totalSize()
+            ]);
+            const status = fromCache ? 'hit' : (st.cached ? 'cached' : 'network');
+            const total = formatFileSize(tot.totalSize);
+            el.textContent = `${total} (${tot.count}) ${status}`;
+        } catch (e) {
+            el.textContent = 'error';
+        }
+    }
+
+    /**
+     * 브라우저 캐시 삭제 + 인메모리 datasetCache 연동 초기화
+     * @param {'current'|'all'} scope
+     */
+    async function deleteBundleCache(scope) {
+        try {
+            if (scope === 'all') {
+                await bundleCache.clear();
+                for (const k of Object.keys(datasetCache)) delete datasetCache[k];
+                framePool = null;
+                console.log('--> 브라우저 캐시 전체 삭제 완료');
             } else {
-                dateKstEl.textContent = '-';
+                const ds = DATASETS[currentDatasetKey];
+                if (ds && ds.bundle) {
+                    await bundleCache.delete(ds.bundle);
+                }
+                const cacheKey = ds ? (ds.cacheKey || currentDatasetKey) : currentDatasetKey;
+                if (datasetCache[cacheKey]) {
+                    if (datasetCache[cacheKey].framePool) datasetCache[cacheKey].framePool.clear();
+                    delete datasetCache[cacheKey];
+                }
+                framePool = null;
+                console.log(`--> 브라우저 캐시 삭제: ${ds ? ds.bundle : currentDatasetKey}`);
             }
+            // 삭제 후 캐시 상태 표시 갱신 (남은 캐시 총량 반영)
+            const ds = DATASETS[currentDatasetKey];
+            if (ds && ds.bundle) {
+                await updateCacheStatusDisplay(ds.bundle, false);
+            } else {
+                const el = document.getElementById('dataset-cache-status');
+                if (el) el.textContent = '-';
+            }
+        } catch (e) {
+            console.error('캐시 삭제 실패:', e);
         }
     }
 
@@ -1184,11 +1310,15 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
 
             const cacheKey = ds.cacheKey || key;
             let metadata, binaryData;
+            let fromCache = false; // 브라우저 캐시(Cache API/IndexedDB) 히트 여부
+            let fileSize = 0; // 로딩한 파일(번들/bin) 바이트 수
             if (datasetCache[cacheKey]) {
                 const cached = datasetCache[cacheKey];
                 metadata = cached.metadata;
                 binaryData = cached.binaryData;
                 framePool = cached.framePool || null;
+                fromCache = true; // 인메모리 캐시 히트 (브라우저 스토리지 재사용 포함)
+                fileSize = cached.fileSize || 0;
             } else if (ds.bundle) {
                 // 타임랩스 번들 로드: 단일 .bin.gz (JSON 헤더 + gzip 멤버) → 프레임 0 복원 → FramePool 생성
                 const loader = new WindDataLoader();
@@ -1196,6 +1326,9 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 const bundle = await loader.loadBundle(ds.bundle, (pct) => {
                     if (loadingText) loadingText.textContent = `${baseLabel} ${pct}%`;
                 });
+                fromCache = !!loader.cacheStatus.fromCache;
+                fileSize = loader.cacheStatus.size || 0;
+                if (fromCache && loadingText) loadingText.textContent = `${ds.label} 캐시에서 로딩 중...`;
                 const pool = new FramePool(loader, 5);
                 const entry = await pool.get(0);
                 pool.prefetchAround(0);
@@ -1219,7 +1352,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 };
                 binaryData = entry.data;
                 framePool = pool;
-                datasetCache[cacheKey] = { metadata, binaryData, framePool: pool, loader, bundle };
+                datasetCache[cacheKey] = { metadata, binaryData, framePool: pool, loader, bundle, fileSize };
             } else {
                 // progress % 표시: bin 다운로드 스트리밍 (json은 병렬로 별도 fetch)
                 const baseLabel = `${ds.label} 로딩 중`;
@@ -1228,12 +1361,18 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                     if (loadingText) loadingText.textContent = `${baseLabel} ${pct}%`;
                 });
                 metadata = await metaPromise;
-                datasetCache[cacheKey] = { metadata, binaryData };
+                fileSize = binaryData.byteLength;
+                datasetCache[cacheKey] = { metadata, binaryData, fileSize };
             }
             // 다운로드 완료 → 동기 처리(엔진 생성) 구간으로 라벨 전환
             if (loadingText) loadingText.textContent = `${ds.label} 데이터 처리 중...`;
 
             updateDatasetInfoPanel(metadata);
+            updateCacheStatusDisplay(ds.bundle, fromCache);
+
+            // '데이터셋 선택' 라벨 우측에 파일 크기 표시 (GB/MB/KB)
+            const fileSizeEl = document.getElementById('dataset-file-size');
+            if (fileSizeEl) fileSizeEl.textContent = formatFileSize(fileSize);
 
             if (metadata && metadata.date_utc) {
                 const date = Cesium.JulianDate.fromDate(new Date(metadata.date_utc));
@@ -1342,6 +1481,31 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     }
 
+    // ================= 브라우저 캐시 삭제 버튼 (접기/펴기) =================
+    const cacheMgmtToggle = document.getElementById('cache-mgmt-toggle');
+    const cacheMgmtBody = document.getElementById('cache-mgmt-body');
+    if (cacheMgmtToggle && cacheMgmtBody) {
+        cacheMgmtToggle.addEventListener('click', () => {
+            const open = cacheMgmtBody.style.display !== 'none';
+            cacheMgmtBody.style.display = open ? 'none' : 'block';
+            cacheMgmtToggle.textContent = open ? '▸ 캐시 관리' : '▾ 캐시 관리';
+        });
+    }
+    const btnCacheDeleteCurrent = document.getElementById('btn-cache-delete-current');
+    if (btnCacheDeleteCurrent) {
+        btnCacheDeleteCurrent.addEventListener('click', () => {
+            deleteBundleCache('current');
+        });
+    }
+    const btnCacheDeleteAll = document.getElementById('btn-cache-delete-all');
+    if (btnCacheDeleteAll) {
+        btnCacheDeleteAll.addEventListener('click', () => {
+            if (confirm('전체 브라우저 캐시를 삭제할까요?\n(다운로드된 격자 데이터가 모두 삭제됩니다.)')) {
+                deleteBundleCache('all');
+            }
+        });
+    }
+
     // ================= 타임랩스 컨트롤러 =================
     const tlSection = document.getElementById('section-timelapse');
     const tlSlider = document.getElementById('tl-slider');
@@ -1403,6 +1567,26 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 const frame = framePool.loader.frames[tlState.frameIndex];
                 updateHfDisplay(frame);
             }
+        });
+    }
+
+    // date 항목 UTC/KST 토글
+    const dateTzToggle = document.getElementById('date-tz-toggle');
+    if (dateTzToggle) {
+        dateTzToggle.addEventListener('click', () => {
+            dateTz = dateTz === 'UTC' ? 'KST' : 'UTC';
+            dateTzToggle.textContent = dateTz;
+            renderDatasetDate();
+        });
+    }
+
+    // 인디케이터 패널 접기/펼치기
+    const infoPanel = document.getElementById('dataset-info-panel');
+    const toggleInfoBtn = document.getElementById('toggle-info-btn');
+    if (toggleInfoBtn && infoPanel) {
+        toggleInfoBtn.addEventListener('click', () => {
+            const collapsed = infoPanel.classList.toggle('collapsed');
+            toggleInfoBtn.textContent = collapsed ? '▴' : '▾';
         });
     }
 
