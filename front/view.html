@@ -518,8 +518,12 @@
         <span class="info-value" id="dataset-file-name">-</span>
     </div>
     <div class="info-item">
-        <span class="info-title">utc date</span>
+        <span class="info-title">date (UTC)</span>
         <span class="info-value" id="dataset-date-utc">-</span>
+    </div>
+    <div class="info-item">
+        <span class="info-title">date (KST)</span>
+        <span class="info-value" id="dataset-date-kst">-</span>
     </div>
 </div>
 
@@ -1096,8 +1100,24 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     function updateDatasetInfoPanel(metadata) {
         const fileNameEl = document.getElementById('dataset-file-name');
         const dateUtcEl = document.getElementById('dataset-date-utc');
+        const dateKstEl = document.getElementById('dataset-date-kst');
         if (fileNameEl) fileNameEl.textContent = (metadata && metadata.file_name) || '-';
         if (dateUtcEl) dateUtcEl.textContent = (metadata && metadata.date_utc) || '-';
+        if (dateKstEl) {
+            const dateUtc = metadata && metadata.date_utc;
+            if (dateUtc) {
+                const d = new Date(dateUtc);
+                if (!isNaN(d)) {
+                    const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+                    const pad = n => String(n).padStart(2, '0');
+                    dateKstEl.textContent = `${kst.getUTCFullYear()}-${pad(kst.getUTCMonth() + 1)}-${pad(kst.getUTCDate())} ${pad(kst.getUTCHours())}:${pad(kst.getUTCMinutes())}:${pad(kst.getUTCSeconds())}`;
+                } else {
+                    dateKstEl.textContent = '-';
+                }
+            } else {
+                dateKstEl.textContent = '-';
+            }
+        }
     }
 
     async function loadDataset(key, skipFlyTo = false) {
