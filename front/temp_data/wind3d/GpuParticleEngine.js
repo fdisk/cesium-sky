@@ -166,6 +166,17 @@ export class GpuParticleEngine {
         const gph = r.gph || r.height || [0.0, 10000.0];
         this.gphMin = Array.isArray(gph) ? gph[0] : (gph.min || 0.0);
         this.gphMax = Array.isArray(gph) ? gph[1] : (gph.max || 10000.0);
+
+        // 레벨별 실제 기압고도 (m). metadata.gphByLevel 이 없으면 gphMin~gphMax 선형 보간으로 생성
+        let gbl = meta.gphByLevel;
+        if (!Array.isArray(gbl) || gbl.length !== this.levelCount) {
+            gbl = [];
+            for (let i = 0; i < this.levelCount; i++) {
+                const t = this.levelCount > 1 ? i / (this.levelCount - 1) : 0;
+                gbl.push(this.gphMin + (this.gphMax - this.gphMin) * t);
+            }
+        }
+        this.gphByLevel = new Float32Array(gbl);
     }
 
     setSpeedFactor(factor) { this.speedFactor = factor; }
@@ -409,6 +420,18 @@ export class GpuParticleEngine {
         const maxSpeed = colorMap[colorMap.length - 1].speed;
 
         const dynamicShaderLib = `
+            // 레벨별 실제 기압고도 (m) — u_gphByLevel[level] 참조, z(0~1)로 선형 보간
+            uniform float u_gphByLevel[32];
+            uniform int u_levelCount;
+            float sampleGph(float z) {
+                float n = float(u_levelCount - 1);
+                float f = clamp(z, 0.0, 1.0) * n;
+                int i0 = int(floor(f));
+                int i1 = min(i0 + 1, u_levelCount - 1);
+                float fr = f - float(i0);
+                return mix(u_gphByLevel[i0], u_gphByLevel[i1], fr);
+            }
+
             vec3 getShaderColor(float speed) {
                 float s = clamp(speed, 0.0, ${maxSpeed.toFixed(1)});
                 if (s <= ${colorMap[0].speed.toFixed(1)}) {
@@ -530,11 +553,11 @@ export class GpuParticleEngine {
  
                 float lon = mix(u_lonRange.x, u_lonRange.y, currentPos.x);
                 float lat = mix(u_latRange.x, u_latRange.y, currentPos.y);
-                float gph = mix(u_gphRange.x, u_gphRange.y, currentPos.z);
- 
+                float gph = sampleGph(currentPos.z);
+  
                 vec3 cartesianPos = geodeticToCartesian(vec3(lon, lat, gph * u_heightScale));
                 gl_Position = czm_modelViewProjection * vec4(cartesianPos, 1.0);
- 
+  
                 vec3 color = getShaderColor(speed);
                 float alpha = (1.0 - segmentRatio) * smoothstep(0.0, 0.1, baseProgress) * (1.0 - smoothstep(0.9, 1.0, baseProgress));
                 v_color = vec4(color, clamp(alpha * 0.8, 0.0, 1.0));
@@ -664,7 +687,7 @@ export class GpuParticleEngine {
  
                 float lon = mix(u_lonRange.x, u_lonRange.y, currentPos.x);
                 float lat = mix(u_latRange.x, u_latRange.y, currentPos.y);
-                float gph = mix(u_gphRange.x, u_gphRange.y, currentPos.z);
+                float gph = sampleGph(currentPos.z);
  
                 vec3 cartesianPos = geodeticToCartesian(vec3(lon, lat, gph * u_heightScale));
                 gl_Position = czm_modelViewProjection * vec4(cartesianPos, 1.0);
@@ -716,6 +739,8 @@ export class GpuParticleEngine {
                     u_lonRange: function() { return new Cesium.Cartesian2(self.lon1, self.lon2); },
                     u_latRange: function() { return new Cesium.Cartesian2(self.lat1, self.lat2); },
                     u_gphRange: function() { return new Cesium.Cartesian2(self.gphMin, self.gphMax); },
+                    u_gphByLevel: function() { return self.gphByLevel; },
+                    u_levelCount: function() { return self.levelCount; },
                     u_layerMask: function() {
                         return new Cesium.Cartesian3(
                             self.layerVisibility.low ? 1.0 : 0.0,

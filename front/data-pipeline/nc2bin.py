@@ -3,7 +3,7 @@ import re
 import json
 import netCDF4 as nc
 import numpy as np
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ====================================================
 # [설정 1] 변환 작업 목록 (JOBS)
@@ -16,22 +16,17 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 JOBS = [
     {
-        # 3km 격자 (r030 동아시아) — 한반도 BBOX 크롭 (현행 데이터)
-        "input": "raw/20260914/r030_v040_easia_prs.2byte.ft000.2026091412.nc",
-        "bin":   "../front/temp_data/wind3d/wind_data_3d.bin",
-        "json":  "../front/temp_data/wind3d/metadata.json",
-        "bbox": {
-            "min_lat": 32.0,   # 남단: 제주도 남쪽 해상
-            "max_lat": 42.0,   # 북단: 백두산 및 함경북도 북단
-            "min_lon": 123.5,  # 서단: 서해 안쪽
-            "max_lon": 131.5,  # 동단: 울릉도/독도 및 동해 중앙
-        },
+        # 3km 격자 (r030 동아시아) — 전체 영역 (크롭 없음)
+        "input": "raw/20260922/r030_v040_easia_prs.2byte.ft003.2026092118.nc",
+        "model": "r030",
+        "date":  "2026-09-21",
+        "bbox": {},
     },
     {
         # 8km 격자 (g576 동아시아) — 전체 영역 (크롭 없음)
-        "input": "raw/20260922/g576_v091_easia_prs.2byte.ft000.2026092118.nc",
-        "bin":   "../front/temp_data/wind3d/wind_data_3d_8km.bin",
-        "json":  "../front/temp_data/wind3d/metadata_8km.json",
+        "input": "raw/20260922/g576_v091_easia_prs.2byte.ft003.2026092118.nc",
+        "model": "g576",
+        "date":  "2026-09-21",
         "bbox": {},
     },
 ]
@@ -71,11 +66,16 @@ def pick_var(ds, key):
 
 def parse_utc_date_from_nc(ds, file_path):
     """
-    NC 파일 내부 Times 변수 또는 파일명(YYYYMMDDHH)에서 원본 UTC 일시 추출 (ISO8601 포맷)
+    NC 파일 내부의 유효 시각(valid time)을 ISO8601 UTC 포맷으로 추출
+    우선순위:
+      1. Times 변수 (r030 스타일, 예: "2026-09-21_21:00:00")
+      2. time 변수 + units (g576/CF-1.7 스타일, 예: 3.0 "hours since 2026-09-21 18:00:00")
+      3. current_time 전역 속성 (g576, 예: "MON SEP 21 21:00:00 2026")
+      4. 파일명 패턴 (예: 2026092118) — 주의: 파일명은 초기화 시각일 수 있음
     """
     file_name = os.path.basename(file_path)
 
-    # 1. NC 파일 내부 Times 변수 확인
+    # 1. Times 변수 (문자열 유효 시각)
     if 'Times' in ds.variables:
         try:
             time_str = ds.variables['Times'][0].tobytes().decode('utf-8').strip()
@@ -85,7 +85,34 @@ def parse_utc_date_from_nc(ds, file_path):
         except Exception:
             pass
 
-    # 2. 파일명 패턴 정규식 추출 (예: 2026091412)
+    # 2. time 변수 + units (CF-1.7: "hours/minutes/seconds since <base>")
+    if 'time' in ds.variables:
+        try:
+            units = ds.variables['time'].getncattr('units')
+            m = re.match(r'(\w+)\s+since\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', units)
+            if m:
+                base = datetime.fromisoformat(m.group(2))
+                value = float(ds.variables['time'][0])
+                unit = m.group(1)
+                if unit.startswith('hour'):
+                    delta = timedelta(hours=value)
+                elif unit.startswith('minute'):
+                    delta = timedelta(minutes=value)
+                else:  # seconds
+                    delta = timedelta(seconds=value)
+                return (base + delta).strftime('%Y-%m-%dT%H:%M:%SZ')
+        except Exception:
+            pass
+
+    # 3. current_time 전역 속성 (g576, 예: "MON SEP 21 21:00:00 2026")
+    if 'current_time' in ds.ncattrs():
+        try:
+            dt = datetime.strptime(ds.getncattr('current_time'), '%a %b %d %H:%M:%S %Y')
+            return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        except Exception:
+            pass
+
+    # 4. 파일명 패턴 정규식 추출 (예: 2026091412)
     match = re.search(r'(\d{10})', file_name)
     if match:
         date_digits = match.group(1)
@@ -193,6 +220,10 @@ def convert_nc_for_gpu_particle(nc_file_path, output_bin_path, output_json_path,
 
     levels, cropped_j, cropped_i = u_data.shape
 
+    # 4.5. 레벨별 평균 기압고도 (m) — 선형 보간 근사 대신 실제 등압면 고도 사용
+    #     (gph_data shape = (levels, j, i) → 각 레벨의 공간 평균)
+    gph_by_level = [float(np.mean(gph_data[k])) for k in range(levels)]
+
     packed_array = np.column_stack((
         u_data.astype(np.float32).flatten(),
         v_data.astype(np.float32).flatten(),
@@ -224,7 +255,8 @@ def convert_nc_for_gpu_particle(nc_file_path, output_bin_path, output_json_path,
                 "w": [float(np.min(w_data)), float(np.max(w_data))],
                 "gph": [float(np.min(gph_data)), float(np.max(gph_data))]
             },
-            "plev": [int(p) for p in plev_data]
+            "plev": [int(p) for p in plev_data],
+            "gphByLevel": gph_by_level
         }
     }
 
@@ -241,11 +273,20 @@ def convert_nc_for_gpu_particle(nc_file_path, output_bin_path, output_json_path,
 
 
 if __name__ == "__main__":
+    # 출력 경로: front/temp_data/wind3d/<model>/<date>/  (스크립트 기준 ../temp_data/...)
+    WIND3D_ROOT = os.path.join(SCRIPT_DIR, "..", "temp_data", "wind3d")
+
     for job in JOBS:
+        model = job.get("model", "wind")
+        date = job.get("date", "latest")
+        out_dir = os.path.join(WIND3D_ROOT, model, date)
+        bin_path = os.path.join(out_dir, "wind_data_3d.bin")
+        json_path = os.path.join(out_dir, "metadata.json")
+
         convert_nc_for_gpu_particle(
             _resolve(job["input"]),
-            _resolve(job["bin"]),
-            _resolve(job["json"]),
+            bin_path,
+            json_path,
             job.get("bbox", {})
         )
         print()

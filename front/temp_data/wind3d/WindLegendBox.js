@@ -24,9 +24,16 @@ export class WindLegendBox {
         if (!this.polylines) return;
         this.polylines.removeAll();
 
-        const { bounds, range } = this.metadata;
-        const minHgt = range.gph[0] * this.heightScale;
-        const maxHgt = range.gph[1] * this.heightScale;
+        const { bounds, range, gphByLevel } = this.metadata;
+        // 레벨별 실제 기압고도 사용 (없으면 gphMin~gphMax 폴백)
+        let minHgt, maxHgt;
+        if (Array.isArray(gphByLevel) && gphByLevel.length > 0) {
+            minHgt = Math.min(...gphByLevel) * this.heightScale;
+            maxHgt = Math.max(...gphByLevel) * this.heightScale;
+        } else {
+            minHgt = range.gph[0] * this.heightScale;
+            maxHgt = range.gph[1] * this.heightScale;
+        }
 
         const sw = [bounds.lon1, bounds.lat1];
         const se = [bounds.lon2, bounds.lat1];
@@ -84,17 +91,24 @@ export class WindLegendBox {
         this.labelEntities.forEach(e => this.viewer.entities.remove(e));
         this.labelEntities = [];
 
-        const { bounds, plev, range } = this.metadata;
+        const { bounds, plev, range, gphByLevel } = this.metadata;
         const lon = bounds.lon1;
         const lat = bounds.lat1;
 
-        const minGph = range.gph[0];
-        const maxGph = range.gph[1];
         const levelCount = plev.length;
+        // 레벨별 실제 기압고도 사용 (없으면 gphMin~gphMax 선형 보간으로 폴백)
+        const hasGphByLevel = Array.isArray(gphByLevel) && gphByLevel.length === levelCount;
 
         for (let i = 0; i < levelCount; i++) {
             const hPa = plev[i];
-            const approxHeightM = minGph + (maxGph - minGph) * (i / (levelCount - 1));
+            let approxHeightM;
+            if (hasGphByLevel) {
+                approxHeightM = gphByLevel[i];
+            } else {
+                const minGph = range.gph[0];
+                const maxGph = range.gph[1];
+                approxHeightM = minGph + (maxGph - minGph) * (i / (levelCount - 1));
+            }
             const scaledHeight = approxHeightM * this.heightScale;
 
             const pos = Cesium.Cartesian3.fromDegrees(lon, lat, scaledHeight);

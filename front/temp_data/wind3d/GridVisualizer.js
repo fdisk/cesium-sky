@@ -42,14 +42,20 @@ export class GridVisualizer {
         const gph = m.range.gph;
         this.gphMin = gph[0];
         this.gphMax = gph[1];
+        // 레벨별 실제 기압고도 (없으면 선형 보간 폴백)
+        this.gphByLevel = (Array.isArray(m.gphByLevel) && m.gphByLevel.length === this.levelCount)
+            ? m.gphByLevel : null;
     }
 
     /**
      * k번째 레벨(0~levelCount-1)의 표시 고도 (m)
-     * 개별 레벨 gph 값이 없으므로 gphMin~gphMax 선형 보간 근사
+     * 레벨별 실제 기압고도(gphByLevel) 사용, 없으면 gphMin~gphMax 선형 보간 근사
      * (WindLegendBox.renderVerticalLabels 와 동일한 방식)
      */
     levelHeight(k) {
+        if (this.gphByLevel) {
+            return this.gphByLevel[k] * this.heightScale;
+        }
         const t = this.levelCount > 1 ? k / (this.levelCount - 1) : 0;
         return (this.gphMin + (this.gphMax - this.gphMin) * t) * this.heightScale;
     }
