@@ -27,7 +27,7 @@ export class WindLegendBox {
         const { bounds, range, gphByLevel } = this.metadata;
         // 레벨별 실제 기압고도 사용 (없으면 gphMin~gphMax 폴백)
         let minHgt, maxHgt;
-        if (Array.isArray(gphByLevel) && gphByLevel.length > 0) {
+        if (gphByLevel && gphByLevel.length > 0) {
             minHgt = Math.min(...gphByLevel) * this.heightScale;
             maxHgt = Math.max(...gphByLevel) * this.heightScale;
         } else {
@@ -97,7 +97,7 @@ export class WindLegendBox {
 
         const levelCount = plev.length;
         // 레벨별 실제 기압고도 사용 (없으면 gphMin~gphMax 선형 보간으로 폴백)
-        const hasGphByLevel = Array.isArray(gphByLevel) && gphByLevel.length === levelCount;
+        const hasGphByLevel = gphByLevel && gphByLevel.length === levelCount;
 
         for (let i = 0; i < levelCount; i++) {
             const hPa = plev[i];

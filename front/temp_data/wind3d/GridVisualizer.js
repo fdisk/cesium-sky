@@ -43,7 +43,7 @@ export class GridVisualizer {
         this.gphMin = gph[0];
         this.gphMax = gph[1];
         // 레벨별 실제 기압고도 (없으면 선형 보간 폴백)
-        this.gphByLevel = (Array.isArray(m.gphByLevel) && m.gphByLevel.length === this.levelCount)
+        this.gphByLevel = (m.gphByLevel && m.gphByLevel.length === this.levelCount)
             ? m.gphByLevel : null;
     }
 

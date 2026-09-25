@@ -1,32 +1,36 @@
 import os
 import re
 import json
+import gzip
 import netCDF4 as nc
 import numpy as np
 from datetime import datetime, timezone, timedelta
 
 # ====================================================
 # [설정 1] 변환 작업 목록 (JOBS)
-#   input : 입력 .nc 경로 (이 스크립트 디렉터리 기준)
-#   bin   : 출력 .bin 경로
-#   json  : 출력 metadata.json 경로
-#   bbox  : 크롭 영역 (빈 {} 이면 전체 영역)
+#   model    : 모델명 (r030 / g576)
+#   initTime : 초기화 시각 YYYYMMDDHH (동일 묶음의 기준)
+#   inputs   : (선택) 명시적 .nc 경로 리스트 (스크립트 디렉터리 기준)
+#              미지정 시 raw/ 디렉터리 자동 스캔 → (model, initTime) 그룹핑
+#   bbox     : 크롭 영역 (빈 {} 이면 전체 영역)
+#
+# 출력: 단일 번들 파일 wind_bundle_<model>_<initTime>.bin.gz
+#   = JSON 헤더(1라인) + '\n' + 프레임별 gzip 멤버 N개 (multi-member gzip)
 # ====================================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+RAW_DIR = os.path.join(SCRIPT_DIR, "raw")
 
 JOBS = [
     {
         # 3km 격자 (r030 동아시아) — 전체 영역 (크롭 없음)
-        "input": "raw/20260922/r030_v040_easia_prs.2byte.ft003.2026092118.nc",
         "model": "r030",
-        "date":  "2026-09-21",
+        "initTime": "2026092118",
         "bbox": {},
     },
     {
         # 8km 격자 (g576 동아시아) — 전체 영역 (크롭 없음)
-        "input": "raw/20260922/g576_v091_easia_prs.2byte.ft003.2026092118.nc",
         "model": "g576",
-        "date":  "2026-09-21",
+        "initTime": "2026092118",
         "bbox": {},
     },
 ]
@@ -49,6 +53,14 @@ VAR_CANDIDATES = {
 DEFAULT_PLEV = [1000, 975, 950, 925, 900, 850, 800, 750, 700,
                 650, 600, 550, 500, 450, 400, 350, 300, 250,
                 200, 150, 100, 70, 50, 30]
+
+# 프레임 채널 순서 (인터리브 레이아웃: [u, v, w, gph] × N 포인트)
+CHANNELS = ("u", "v", "w", "gph")
+
+# raw/ 파일명 패턴: <model>_v<ver>_...ft<XXX>.<YYYYMMDDHH>.nc
+NC_FILE_PATTERN = re.compile(
+    r'^(?P<model>[a-z]+\d+)_v\d+_.+\.ft(?P<ft>\d{3})\.(?P<init>\d{10})\.nc$'
+)
 
 
 def _resolve(path):
@@ -175,12 +187,57 @@ def compute_bbox_slice(lons, lats, bbox):
     return j_start, j_end, i_start, i_end
 
 
-def convert_nc_for_gpu_particle(nc_file_path, output_bin_path, output_json_path, bbox=None):
+# ====================================================
+# [자동 스캔] raw/ 디렉터리 → (model, initTime) 그룹핑
+# ====================================================
+def scan_raw_groups(raw_dir=RAW_DIR, model=None, init_time=None):
+    """
+    raw/ 하위 디렉터리(backup 제외)의 .nc 파일을 파일명 패턴으로 스캔해
+    (model, initTime) → [(ft, path), ...] (ft 오름차순) 그룹으로 반환.
+    model / init_time 필터 지정 시 해당 그룹만 반환.
+    """
+    groups = {}
+    if not os.path.isdir(raw_dir):
+        return groups
+
+    for entry in sorted(os.listdir(raw_dir)):
+        sub = os.path.join(raw_dir, entry)
+        if not os.path.isdir(sub) or entry == "backup":
+            continue
+        for fname in sorted(os.listdir(sub)):
+            m = NC_FILE_PATTERN.match(fname)
+            if not m:
+                continue
+            g_model = m.group("model")
+            g_init = m.group("init")
+            if model and g_model != model:
+                continue
+            if init_time and g_init != init_time:
+                continue
+            path = os.path.join(sub, fname)
+            groups.setdefault((g_model, g_init), []).append((int(m.group("ft")), path))
+
+    for key in groups:
+        groups[key].sort(key=lambda x: x[0])
+    return groups
+
+
+# ====================================================
+# [프레임 변환] NC → float32 채널 + 메타데이터
+# ====================================================
+def read_frame_from_nc(nc_file_path, bbox=None):
+    """
+    NC 파일 1개(=프레임 1개)를 읽어 float32 채널 데이터와 메타데이터를 반환.
+    반환 dict:
+      file_name, valid_time, iCount, jCount, levelCount,
+      bounds{lon1,lat1,lon2,lat2}, plev, gphByLevel,
+      channels: {u,v,w,gph} → float32 (level, j, i) 배열
+    """
     print(f"--> NetCDF 파일 읽는 중: {nc_file_path}")
     ds = nc.Dataset(nc_file_path)
 
     file_name = os.path.basename(nc_file_path)
-    utc_date = parse_utc_date_from_nc(ds, nc_file_path)
+    valid_time = parse_utc_date_from_nc(ds, nc_file_path)
 
     # 1. 2D 경도/위도 좌표 그리드 추출 (2D/1D 자동 감지)
     lons, lats = extract_grid(ds)
@@ -188,24 +245,16 @@ def convert_nc_for_gpu_particle(nc_file_path, output_bin_path, output_json_path,
     # 2. BBOX 슬라이싱 인덱스 계산
     j_start, j_end, i_start, i_end = compute_bbox_slice(lons, lats, bbox)
 
-    # 3. 데이터 크롭 및 패킹 (변수명 자동 감지)
-    u_name = pick_var(ds, "u")
-    v_name = pick_var(ds, "v")
-    w_name = pick_var(ds, "w")
-    gph_name = pick_var(ds, "gph")
-
-    u_data = ds.variables[u_name][0][:, j_start:j_end, i_start:i_end]
-    v_data = ds.variables[v_name][0][:, j_start:j_end, i_start:i_end]
-    w_data = ds.variables[w_name][0][:, j_start:j_end, i_start:i_end]
-    gph_data = ds.variables[gph_name][0][:, j_start:j_end, i_start:i_end]
+    # 3. 데이터 크롭 (변수명 자동 감지)
+    channels = {}
+    for ch in CHANNELS:
+        var_name = pick_var(ds, ch)
+        channels[ch] = ds.variables[var_name][0][:, j_start:j_end, i_start:i_end].astype(np.float32)
 
     cropped_lons = lons[j_start:j_end, i_start:i_end]
     cropped_lats = lats[j_start:j_end, i_start:i_end]
 
-    actual_lon1 = float(np.min(cropped_lons))
-    actual_lat1 = float(np.min(cropped_lats))
-    actual_lon2 = float(np.max(cropped_lons))
-    actual_lat2 = float(np.max(cropped_lats))
+    levels, j_count, i_count = channels["u"].shape
 
     # 4. 등압면 추출 (PLEV → levs → 기본 리스트)
     plev_var = None
@@ -218,75 +267,191 @@ def convert_nc_for_gpu_particle(nc_file_path, output_bin_path, output_json_path,
     else:
         plev_data = DEFAULT_PLEV
 
-    levels, cropped_j, cropped_i = u_data.shape
-
-    # 4.5. 레벨별 평균 기압고도 (m) — 선형 보간 근사 대신 실제 등압면 고도 사용
-    #     (gph_data shape = (levels, j, i) → 각 레벨의 공간 평균)
-    gph_by_level = [float(np.mean(gph_data[k])) for k in range(levels)]
-
-    packed_array = np.column_stack((
-        u_data.astype(np.float32).flatten(),
-        v_data.astype(np.float32).flatten(),
-        w_data.astype(np.float32).flatten(),
-        gph_data.astype(np.float32).flatten()
-    )).astype(np.float32)
-
-    os.makedirs(os.path.dirname(os.path.abspath(output_bin_path)), exist_ok=True)
-    with open(output_bin_path, 'wb') as f:
-        f.write(packed_array.tobytes())
-
-    # 5. UTC 일시 원본 정보를 포함한 metadata.json 작성
-    metadata = {
-        "metadata": {
-            "file_name": file_name,
-            "date_utc": utc_date,
-            "iCount": cropped_i,
-            "jCount": cropped_j,
-            "levelCount": levels,
-            "bounds": {
-                "lon1": actual_lon1,
-                "lat1": actual_lat1,
-                "lon2": actual_lon2,
-                "lat2": actual_lat2
-            },
-            "range": {
-                "u": [float(np.min(u_data)), float(np.max(u_data))],
-                "v": [float(np.min(v_data)), float(np.max(v_data))],
-                "w": [float(np.min(w_data)), float(np.max(w_data))],
-                "gph": [float(np.min(gph_data)), float(np.max(gph_data))]
-            },
-            "plev": [int(p) for p in plev_data],
-            "gphByLevel": gph_by_level
-        }
-    }
-
-    with open(output_json_path, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, indent=4, ensure_ascii=False)
+    # 5. 레벨별 평균 기압고도 (m)
+    gph_by_level = [float(np.mean(channels["gph"][k])) for k in range(levels)]
 
     ds.close()
 
-    print(f"--> [완료] 파일명: {file_name} | UTC 원본 일시: {utc_date}")
-    print(f"--> [크롭] iCount={cropped_i}, jCount={cropped_j}, levelCount={levels}")
-    print(f"--> [범위] lon {actual_lon1:.2f}~{actual_lon2:.2f}, lat {actual_lat1:.2f}~{actual_lat2:.2f}")
-    print(f"--> [출력] {output_bin_path} ({os.path.getsize(output_bin_path) / 1024 / 1024:.1f} MB)")
-    print(f"--> [출력] {output_json_path}")
+    return {
+        "file_name": file_name,
+        "valid_time": valid_time,
+        "iCount": i_count,
+        "jCount": j_count,
+        "levelCount": levels,
+        "bounds": {
+            "lon1": float(np.min(cropped_lons)),
+            "lat1": float(np.min(cropped_lats)),
+            "lon2": float(np.max(cropped_lons)),
+            "lat2": float(np.max(cropped_lats)),
+        },
+        "plev": [int(p) for p in plev_data],
+        "gphByLevel": gph_by_level,
+        "channels": channels,
+    }
+
+
+# ====================================================
+# [uint16 스케일링] 프레임별 min/max → uint16 인터리브 배열
+# ====================================================
+def pack_uint16_frame(channels):
+    """
+    float32 채널 dict → (uint16 인터리브 배열, 스케일 파라미터 dict)
+    - 레이아웃: 포인트 단위 [u, v, w, gph] 인터리브 (Float32 .bin과 동일 구조)
+    - 채널별: uint16 = round((x - min) / step), step = (max - min) / 65534
+    - 복원: x = min + uint16 * step
+    - 주의: 양자화 값 0~65534는 uint16 범위 — int16(최대 32767)이면 상단 절반이 랩어라운드
+    """
+    n_points = channels["u"].size
+    packed = np.empty((n_points, len(CHANNELS)), dtype=np.uint16)
+    scale = {}
+
+    for ci, ch in enumerate(CHANNELS):
+        arr = channels[ch]
+        mn = float(arr.min())
+        mx = float(arr.max())
+        if mx - mn < 1e-9:
+            mx = mn + 1e-9
+        step = (mx - mn) / 65534.0
+        scale[ch] = {"min": mn, "max": mx, "step": step}
+        q = np.clip(np.round((arr - mn) / step), 0, 65534).astype(np.uint16)
+        packed[:, ci] = q.flatten()
+
+    return np.ascontiguousarray(packed), scale
+
+
+def restore_float32_frame(uint16_bytes, scale):
+    """uint16 바이트 + 스케일 파라미터 → Float32 인터리브 배열 (정밀도 검증용)"""
+    arr = np.frombuffer(uint16_bytes, dtype=np.uint16).reshape(-1, len(CHANNELS))
+    out = np.empty(arr.shape, dtype=np.float32)
+    for ci, ch in enumerate(CHANNELS):
+        s = scale[ch]
+        out[:, ci] = (arr[:, ci].astype(np.float32) * s["step"]) + s["min"]
+    return out
+
+
+# ====================================================
+# [번들 변환] N개 NC → 단일 파일 (JSON 헤더 + multi-member gzip)
+# ====================================================
+def convert_bundle(job, out_dir):
+    """
+    job = {model, initTime, inputs?, bbox?}
+    출력: <out_dir>/wind_bundle_<model>_<initTime>.bin.gz (단일 파일)
+      = 1라인 JSON 헤더 + b'\\n' + 프레임별 gzip 멤버 N개 (multi-member gzip)
+      - 헤더: {model, initTime, dtype, layout, channels, iCount, jCount,
+               levelCount, bounds, plev, frames:[{ft, validTime, gzOffset,
+               gzSize, scale, gphByLevel}]}
+      - gzOffset/gzSize: 멤버 영역(헤더+\\n 이후) 기준 상대 오프셋/크기
+        → 헤더 크기와 무관하게 오프셋이 유효 (순환 의존 회피)
+    """
+    model = job["model"]
+    init_time = job["initTime"]
+    bbox = job.get("bbox", {})
+
+    # 입력 파일 결정: 명시적 inputs 또는 raw/ 자동 스캔
+    inputs = job.get("inputs")
+    if inputs:
+        frame_paths = [(None, _resolve(p)) for p in inputs]
+    else:
+        groups = scan_raw_groups(model=model, init_time=init_time)
+        key = (model, init_time)
+        if key not in groups or not groups[key]:
+            print(f"[에러] raw/ 에서 {model}/{init_time} 묶음 파일 없음 — 스킵")
+            return
+        frame_paths = groups[key]
+
+    # ft 추출 (inputs 명시 시 파일명에서)
+    frames = []
+    for ft, path in frame_paths:
+        if ft is None:
+            m = NC_FILE_PATTERN.match(os.path.basename(path))
+            ft = int(m.group("ft")) if m else 0
+        frames.append((ft, path))
+    frames.sort(key=lambda x: x[0])
+
+    print(f"== {model} {init_time} 번들 변환 ({len(frames)}프레임) ==")
+    os.makedirs(out_dir, exist_ok=True)
+
+    frame_metas = []
+    members = []
+    common = None
+    offset = 0
+
+    for idx, (ft, path) in enumerate(frames):
+        frame = read_frame_from_nc(path, bbox)
+
+        # 공통 격자 정보 검증 (첫 프레임 기준)
+        if common is None:
+            common = {
+                "iCount": frame["iCount"],
+                "jCount": frame["jCount"],
+                "levelCount": frame["levelCount"],
+                "bounds": frame["bounds"],
+                "plev": frame["plev"],
+            }
+        else:
+            for k in ("iCount", "jCount", "levelCount"):
+                if common[k] != frame[k]:
+                    print(f"[경고] {os.path.basename(path)} 격자 크기 불일치: "
+                          f"{k} {common[k]} != {frame[k]}")
+
+        # uint16 스케일링 + gzip 멤버 압축 (메모리 버퍼링)
+        uint16_arr, scale = pack_uint16_frame(frame["channels"])
+        raw_bytes = uint16_arr.tobytes()
+        member = gzip.compress(raw_bytes)
+
+        # 정밀도 검증 (첫 프레임만 샘플링)
+        if idx == 0:
+            restored = restore_float32_frame(raw_bytes, scale)
+            for ci, ch in enumerate(CHANNELS):
+                orig = frame["channels"][ch].flatten()
+                err = float(np.max(np.abs(restored[:, ci] - orig)))
+                print(f"    [정밀도] {ch} max|Δ| = {err:.6f}")
+
+        frame_metas.append({
+            "ft": ft,
+            "validTime": frame["valid_time"],
+            "gzOffset": offset,
+            "gzSize": len(member),
+            "scale": scale,
+            "gphByLevel": frame["gphByLevel"],
+        })
+        members.append(member)
+        offset += len(member)
+        print(f"    ft{ft:03d} {frame['valid_time']} → gzip 멤버 "
+              f"({len(member) / 1024 / 1024:.1f} MB, offset={offset - len(member)})")
+
+    # 단일 번들 파일: 1라인 JSON 헤더 + b'\n' + gzip 멤버 N개
+    header = {
+        "model": model,
+        "initTime": init_time,
+        "dtype": "uint16",
+        "layout": "interleaved_uvwgph",
+        "channels": list(CHANNELS),
+        **common,
+        "frames": frame_metas,
+    }
+    header_bytes = json.dumps(header, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    bundle_path = os.path.join(out_dir, f"wind_bundle_{model}_{init_time}.bin.gz")
+    with open(bundle_path, "wb") as f:
+        f.write(header_bytes)
+        f.write(b"\n")
+        for member in members:
+            f.write(member)
+
+    total_size = os.path.getsize(bundle_path)
+    print(f"--> [완료] {model}/{init_time}: {len(frames)}프레임, "
+          f"단일 파일 {total_size / 1024 / 1024:.1f} MB")
+    print(f"--> [출력] {bundle_path}")
+    print()
 
 
 if __name__ == "__main__":
-    # 출력 경로: front/temp_data/wind3d/<model>/<date>/  (스크립트 기준 ../temp_data/...)
+    # 출력 경로: front/temp_data/wind3d/<model>/<initTime>/  (스크립트 기준 ../temp_data/...)
     WIND3D_ROOT = os.path.join(SCRIPT_DIR, "..", "temp_data", "wind3d")
 
     for job in JOBS:
         model = job.get("model", "wind")
-        date = job.get("date", "latest")
-        out_dir = os.path.join(WIND3D_ROOT, model, date)
-        bin_path = os.path.join(out_dir, "wind_data_3d.bin")
-        json_path = os.path.join(out_dir, "metadata.json")
+        init_time = job.get("initTime", "latest")
+        out_dir = os.path.join(WIND3D_ROOT, model, init_time)
 
-        convert_nc_for_gpu_particle(
-            _resolve(job["input"]),
-            bin_path,
-            json_path,
-            job.get("bbox", {})
-        )
-        print()
+        convert_bundle(job, out_dir)

@@ -169,7 +169,7 @@ export class GpuParticleEngine {
 
         // 레벨별 실제 기압고도 (m). metadata.gphByLevel 이 없으면 gphMin~gphMax 선형 보간으로 생성
         let gbl = meta.gphByLevel;
-        if (!Array.isArray(gbl) || gbl.length !== this.levelCount) {
+        if (!gbl || gbl.length !== this.levelCount) {
             gbl = [];
             for (let i = 0; i < this.levelCount; i++) {
                 const t = this.levelCount > 1 ? i / (this.levelCount - 1) : 0;
@@ -245,6 +245,23 @@ export class GpuParticleEngine {
     setLegendVisibility(showBox, showPressureLabels) {
         if (this.legendContainer) this.legendContainer.style.display = showBox ? 'block' : 'none';
         if (this.pressureLabelsDom) this.pressureLabelsDom.style.display = showPressureLabels ? 'block' : 'none';
+    }
+
+    /**
+     * 타임랩스 프레임 전환 — 현재 프레임 데이터 교체 후 파티클/단면도 재생성
+     * @param {number} frameIndex  프레임 인덱스 (정보용)
+     * @param {Float32Array} frameData  [U,V,W,GPH] × N 포인트 (int16 복원된 Float32)
+     * @param {Float32Array} [gphByLevel]  프레임별 레벨 기압고도 (없으면 기존 유지)
+     */
+    setFrame(frameIndex, frameData, gphByLevel) {
+        this.currentFrameIndex = frameIndex;
+        this.binaryData = frameData;
+        if (gphByLevel && gphByLevel.length === this.levelCount) {
+            this.gphByLevel = new Float32Array(gphByLevel);
+        }
+        // 파티클 버퍼 재생성 (u/v/w 재샘플링) + 단면도 CPU 텍스처 재생성
+        this.createParticlePrimitives();
+        this.updateSlicePlanes();
     }
 
     getColorFromSpeed(speed) {

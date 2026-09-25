@@ -525,6 +525,13 @@
         <span class="info-title">date (KST)</span>
         <span class="info-value" id="dataset-date-kst">-</span>
     </div>
+    <div class="info-item">
+        <span class="info-title" style="display:flex; align-items:center; gap:4px;">
+            hf
+            <button id="hf-tz-toggle" style="background:#1e293b; color:#38bdf8; border:1px solid #475569; border-radius:3px; font-size:9px; padding:0 4px; cursor:pointer; line-height:14px;">UTC</button>
+        </span>
+        <span class="info-value" id="dataset-hf" style="font-family:Consolas, 'Courier New', monospace;">-</span>
+    </div>
 </div>
 
 <!-- 우측 상단/하단 수직 레이아웃 (범례 + 북마크 패널) -->
@@ -577,6 +584,34 @@
                 <option value="8km" selected>8km 격자 (g576 동아시아)</option>
             </select>
             <div id="dataset-status" style="font-size:9px; color:#94a3b8; margin-top:3px;"></div>
+        </div>
+
+        <!-- 타임랩스 -->
+        <div id="section-timelapse" style="display:none; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+            <div style="font-size:11px; margin-bottom:4px; color:#f8fafc;">
+                타임랩스 <span id="tl-validtime" style="color:#94a3b8; font-size:10px;"></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                <button id="tl-play" style="width:28px; height:22px; background:#1e293b; color:#fff; border:1px solid #475569; border-radius:4px; font-size:11px; cursor:pointer;">▶</button>
+                <select id="tl-speed" style="background:#1e293b; color:#fff; border:1px solid #475569; padding:2px; border-radius:4px; font-size:10px;">
+                    <option value="0.1" selected>0.1 fps</option>
+                    <option value="0.2">0.2 fps</option>
+                    <option value="0.5">0.5 fps</option>
+                    <option value="0.5">0.5 fps</option>
+                    <option value="1">1 fps</option>
+                    <option value="2">2 fps</option>
+                </select>
+                <span id="tl-frame-label" style="margin-left:auto; font-size:10px; font-family:Consolas, 'Courier New', monospace; display:flex; align-items:baseline; gap:4px;">
+                    <span id="tl-frame-offset" style="min-width:4ch; text-align:right; color:#94a3b8;"></span>
+                    <span id="tl-frame-ft" style="color:#38bdf8; font-weight:bold;"></span>
+                    <span id="tl-frame-count" style="color:#94a3b8;"></span>
+                </span>
+            </div>
+            <input type="range" id="tl-slider" min="0" max="0" step="1" value="0" style="width:100%;">
+            <div style="display:flex; align-items:center; gap:6px; margin-top:4px;">
+                <button id="tl-prev" style="width:28px; height:22px; background:#1e293b; color:#fff; border:1px solid #475569; border-radius:4px; font-size:11px; cursor:pointer;" title="이전 프레임">◀</button>
+                <button id="tl-next" style="width:28px; height:22px; background:#1e293b; color:#fff; border:1px solid #475569; border-radius:4px; font-size:11px; cursor:pointer;" title="다음 프레임">▶</button>
+            </div>
         </div>
 
         <!-- 고도 과장 배율 -->
@@ -874,6 +909,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     import { GpuParticleEngine } from '/temp_data/wind3d/GpuParticleEngine.js';
     import { WindLegendBox } from '/temp_data/wind3d/WindLegendBox.js';
     import { GridVisualizer } from '/temp_data/wind3d/GridVisualizer.js';
+    import { WindDataLoader, FramePool } from '/temp_data/wind3d/WindDataLoader.js';
 
     const CAMERA = {
         destination: { lon: 128.666575, lat: 23.075479, height: 1618355 },
@@ -1024,6 +1060,8 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
 
     const DATASETS = {
         '3km': {
+            bundle: '/temp_data/wind3d/r030/2026092118/wind_bundle_r030_2026092118.bin.gz',
+            cacheKey: 'r030_2026092118',
             json: '/temp_data/wind3d/r030/2026-09-21/metadata.json',
             bin:  '/temp_data/wind3d/r030/2026-09-21/wind_data_3d.bin',
             label: '3km 격자 (r030 동아시아)',
@@ -1033,6 +1071,8 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             }
         },
         '8km': {
+            bundle: '/temp_data/wind3d/g576/2026092118/wind_bundle_g576_2026092118.bin.gz',
+            cacheKey: 'g576_2026092118',
             json: '/temp_data/wind3d/g576/2026-09-21/metadata.json',
             bin:  '/temp_data/wind3d/g576/2026-09-21/wind_data_3d.bin',
             label: '8km 격자 (g576 동아시아)',
@@ -1044,6 +1084,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     };
 
     const datasetCache = {};
+    let framePool = null;
 
     function updateHtmlLegendFromEngine(engineInstance) {
         const gradientBar = document.getElementById('legend-gradient-bar');
@@ -1125,6 +1166,9 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         const ds = DATASETS[key];
         if (!ds) return;
 
+        stopTimelapse();
+        framePool = null;
+
         const statusEl = document.getElementById('dataset-status');
         if (statusEl) statusEl.textContent = `${ds.label} 로딩 중...`;
 
@@ -1138,10 +1182,44 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             window.legendBoxInstance = null;
             window.gridVisualizer = null;
 
+            const cacheKey = ds.cacheKey || key;
             let metadata, binaryData;
-            if (datasetCache[key]) {
-                metadata = datasetCache[key].metadata;
-                binaryData = datasetCache[key].binaryData;
+            if (datasetCache[cacheKey]) {
+                const cached = datasetCache[cacheKey];
+                metadata = cached.metadata;
+                binaryData = cached.binaryData;
+                framePool = cached.framePool || null;
+            } else if (ds.bundle) {
+                // 타임랩스 번들 로드: 단일 .bin.gz (JSON 헤더 + gzip 멤버) → 프레임 0 복원 → FramePool 생성
+                const loader = new WindDataLoader();
+                const baseLabel = `${ds.label} 로딩 중`;
+                const bundle = await loader.loadBundle(ds.bundle, (pct) => {
+                    if (loadingText) loadingText.textContent = `${baseLabel} ${pct}%`;
+                });
+                const pool = new FramePool(loader, 5);
+                const entry = await pool.get(0);
+                pool.prefetchAround(0);
+                const s0 = loader.frames[0].scale;
+                metadata = {
+                    iCount: bundle.iCount,
+                    jCount: bundle.jCount,
+                    levelCount: bundle.levelCount,
+                    bounds: bundle.bounds,
+                    plev: bundle.plev,
+                    range: { gph: [s0.gph.min, s0.gph.max] },
+                    gphByLevel: Array.from(entry.gphByLevel),
+                    file_name: `${bundle.model}_${bundle.initTime}`,
+                    date_utc: (() => {
+                        const t = bundle.initTime; // e.g. "2026092118"
+                        if (t && t.length === 10) {
+                            return `${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}T${t.slice(8,10)}:00:00Z`;
+                        }
+                        return entry.validTime;
+                    })()
+                };
+                binaryData = entry.data;
+                framePool = pool;
+                datasetCache[cacheKey] = { metadata, binaryData, framePool: pool, loader, bundle };
             } else {
                 // progress % 표시: bin 다운로드 스트리밍 (json은 병렬로 별도 fetch)
                 const baseLabel = `${ds.label} 로딩 중`;
@@ -1150,7 +1228,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                     if (loadingText) loadingText.textContent = `${baseLabel} ${pct}%`;
                 });
                 metadata = await metaPromise;
-                datasetCache[key] = { metadata, binaryData };
+                datasetCache[cacheKey] = { metadata, binaryData };
             }
             // 다운로드 완료 → 동기 처리(엔진 생성) 구간으로 라벨 전환
             if (loadingText) loadingText.textContent = `${ds.label} 데이터 처리 중...`;
@@ -1165,6 +1243,8 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
 
             windEngine = new GpuParticleEngine(viewer, metadata, binaryData);
             window.particleEngine = windEngine;
+
+            initTimelapseUI(!!framePool);
 
             windEngine.setSliceVisibility('x', toggleX ? toggleX.checked : false);
             windEngine.setSliceVisibility('y', toggleY ? toggleY.checked : false);
@@ -1255,14 +1335,171 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         });
     }
 
-    loadDataset('8km');
-
     const datasetSelect = document.getElementById('dataset-select');
     if (datasetSelect) {
         datasetSelect.addEventListener('change', (e) => {
             loadDataset(e.target.value);
         });
     }
+
+    // ================= 타임랩스 컨트롤러 =================
+    const tlSection = document.getElementById('section-timelapse');
+    const tlSlider = document.getElementById('tl-slider');
+    const tlPlayBtn = document.getElementById('tl-play');
+    const tlSpeedSel = document.getElementById('tl-speed');
+    const tlValidTime = document.getElementById('tl-validtime');
+    const tlFrameLabel = document.getElementById('tl-frame-label');
+    const tlFrameOffset = document.getElementById('tl-frame-offset');
+    const tlFrameFt = document.getElementById('tl-frame-ft');
+    const tlFrameCount = document.getElementById('tl-frame-count');
+    const tlPrevBtn = document.getElementById('tl-prev');
+    const tlNextBtn = document.getElementById('tl-next');
+
+    const tlState = { playing: false, timer: null, frameIndex: 0, busy: false };
+
+    function formatValidTime(validTime) {
+        if (!validTime) return '';
+        const d = new Date(validTime);
+        if (isNaN(d.getTime())) return validTime;
+        const pad = (n) => String(n).padStart(2, '0');
+        const utc = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}Z`;
+        const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+        const kstStr = `${pad(kst.getUTCHours())}:${pad(kst.getUTCMinutes())}KST`;
+        return `${d.toISOString().slice(0, 10)} ${utc} / ${kstStr}`;
+    }
+
+    const hfEl = document.getElementById('dataset-hf');
+    const hfTzToggle = document.getElementById('hf-tz-toggle');
+    let hfTz = 'UTC';
+
+    function formatHfTime(time, tz) {
+        if (time == null) return null;
+        const d = (time instanceof Date) ? time : new Date(time);
+        if (isNaN(d.getTime())) return null;
+        const pad = (n) => String(n).padStart(2, '0');
+        if (tz === 'KST') {
+            const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+            return `${kst.getUTCFullYear()}-${pad(kst.getUTCMonth() + 1)}-${pad(kst.getUTCDate())} ${pad(kst.getUTCHours())}:${pad(kst.getUTCMinutes())}`;
+        }
+        return `${d.toISOString().slice(0, 10)} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+    }
+
+    function updateHfDisplay(frame) {
+        if (!hfEl) return;
+        if (!frame) { hfEl.textContent = '-'; return; }
+        // 기준 시각(initTime) = validTime - fth (프레임 validTime은 initTime + fth 이므로)
+        const base = new Date(frame.validTime);
+        if (isNaN(base.getTime())) { hfEl.textContent = '-'; return; }
+        base.setTime(base.getTime() - frame.ft * 3600 * 1000);
+        const t = formatHfTime(base, hfTz);
+        hfEl.textContent = t ? `+${frame.ft}h ${t}` : '-';
+    }
+
+    if (hfTzToggle) {
+        hfTzToggle.addEventListener('click', () => {
+            hfTz = hfTz === 'UTC' ? 'KST' : 'UTC';
+            hfTzToggle.textContent = hfTz;
+            if (framePool) {
+                const frame = framePool.loader.frames[tlState.frameIndex];
+                updateHfDisplay(frame);
+            }
+        });
+    }
+
+    function updateTimelineUI() {
+        if (!framePool) return;
+        const frame = framePool.loader.frames[tlState.frameIndex];
+        if (!frame) return;
+        if (tlValidTime) tlValidTime.textContent = formatValidTime(frame.validTime);
+        updateHfDisplay(frame);
+        if (tlFrameLabel) {
+            const offset = `+${frame.ft}h`;
+            if (tlFrameOffset) tlFrameOffset.textContent = offset;
+            if (tlFrameFt) tlFrameFt.textContent = `ft${String(frame.ft).padStart(3, '0')}`;
+            if (tlFrameCount) tlFrameCount.textContent = `(${tlState.frameIndex + 1}/${framePool.frameCount})`;
+        }
+        if (tlSlider) {
+            tlSlider.max = String(framePool.frameCount - 1);
+            tlSlider.value = String(tlState.frameIndex);
+        }
+    }
+
+    function initTimelapseUI(hasBundle) {
+        if (tlSection) tlSection.style.display = hasBundle ? 'block' : 'none';
+        if (!hasBundle) {
+            if (hfEl) hfEl.textContent = '-';
+            return;
+        }
+        tlState.frameIndex = 0;
+        updateTimelineUI();
+    }
+
+    async function applyFrame(frameIndex) {
+        if (!framePool || !windEngine || tlState.busy) return;
+        tlState.busy = true;
+        try {
+            const entry = await framePool.get(frameIndex);
+            if (!windEngine) return;
+            windEngine.setFrame(frameIndex, entry.data, entry.gphByLevel);
+            tlState.frameIndex = frameIndex;
+            framePool.prefetchAround(frameIndex);
+            updateTimelineUI();
+        } catch (e) {
+            console.error('프레임 적용 실패:', e);
+        } finally {
+            tlState.busy = false;
+        }
+    }
+
+    function stopTimelapse() {
+        if (tlState.timer) { clearInterval(tlState.timer); tlState.timer = null; }
+        tlState.playing = false;
+        if (tlPlayBtn) tlPlayBtn.textContent = '▶';
+    }
+
+    function startTimelapse() {
+        if (!framePool || tlState.playing) return;
+        const speed = tlSpeedSel ? parseFloat(tlSpeedSel.value) : 0.5;
+        const interval = Math.max(200, Math.round(1000 / speed));
+        tlState.playing = true;
+        if (tlPlayBtn) tlPlayBtn.textContent = '⏸';
+        tlState.timer = setInterval(async () => {
+            if (tlState.busy) return;
+            const n = framePool.frameCount;
+            const next = (tlState.frameIndex + 1) % n;
+            await applyFrame(next);
+        }, interval);
+    }
+
+    if (tlPlayBtn) {
+        tlPlayBtn.addEventListener('click', () => {
+            if (tlState.playing) stopTimelapse();
+            else startTimelapse();
+        });
+    }
+    if (tlSlider) {
+        tlSlider.addEventListener('input', () => {
+            stopTimelapse();
+            applyFrame(parseInt(tlSlider.value, 10));
+        });
+    }
+
+    function stepFrame(delta) {
+        if (!framePool) return;
+        stopTimelapse();
+        const n = framePool.frameCount;
+        const next = (tlState.frameIndex + delta + n) % n;
+        applyFrame(next);
+    }
+    if (tlPrevBtn) {
+        tlPrevBtn.addEventListener('click', () => stepFrame(-1));
+    }
+    if (tlNextBtn) {
+        tlNextBtn.addEventListener('click', () => stepFrame(1));
+    }
+
+    // 초기 데이터셋 로드 (타임랩스 컨트롤러 초기화 이후에 호출해야 tlState 접근 가능)
+    loadDataset('8km');
 
     if (viewer) {
         viewer.camera.flyHome = function () {
