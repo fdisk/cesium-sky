@@ -51,11 +51,13 @@ export class GpuParticleEngine {
         { speed: 150.0, color: [52, 52, 52]    }  // 150.0 knot : 어두운 회색 (150 표기 이상)
     ];
     
-    constructor(viewer, metadata, binaryData, particleCount = 20000) {
+    constructor(viewer, metadata, binaryData, particleCount) {
         this.viewer = viewer;
         this.metadata = metadata;
         this.binaryData = binaryData;
-        this.particleCount = particleCount;
+        this.rawParticleCount = particleCount;
+        this.particleCount = particleCount || 20000;
+        this.particleCountConfigured = !!particleCount;
         
         this.speedFactor = GpuParticleEngine.CONFIG.DEFAULT_SPEED_FACTOR;
         this.heightScale = GpuParticleEngine.CONFIG.DEFAULT_HEIGHT_SCALE;
@@ -152,11 +154,13 @@ export class GpuParticleEngine {
 
         const b = meta.bounds;
         if (Array.isArray(b) && b.length >= 2) {
-            this.lon1 = b[0][0]; this.lat1 = b[0][1];
-            this.lon2 = b[1][0]; this.lat2 = b[1][1];
+            this.lon1 = Number(b[0][0]); this.lat1 = Number(b[0][1]);
+            this.lon2 = Number(b[1][0]); this.lat2 = Number(b[1][1]);
         } else if (b && typeof b === 'object') {
-            this.lon1 = b.lon1 || 124.0; this.lon2 = b.lon2 || 132.0;
-            this.lat1 = b.lat1 || 33.0; this.lat2 = b.lat2 || 43.0;
+            this.lon1 = (b.lon1 !== undefined && b.lon1 !== null) ? Number(b.lon1) : 124.0;
+            this.lon2 = (b.lon2 !== undefined && b.lon2 !== null) ? Number(b.lon2) : 132.0;
+            this.lat1 = (b.lat1 !== undefined && b.lat1 !== null) ? Number(b.lat1) : 33.0;
+            this.lat2 = (b.lat2 !== undefined && b.lat2 !== null) ? Number(b.lat2) : 43.0;
         } else {
             this.lon1 = 124.0; this.lon2 = 132.0;
             this.lat1 = 33.0; this.lat2 = 43.0;
@@ -164,8 +168,15 @@ export class GpuParticleEngine {
 
         const r = meta.range || meta.gphRange || {};
         const gph = r.gph || r.height || [0.0, 10000.0];
-        this.gphMin = Array.isArray(gph) ? gph[0] : (gph.min || 0.0);
-        this.gphMax = Array.isArray(gph) ? gph[1] : (gph.max || 10000.0);
+        this.gphMin = Array.isArray(gph) ? gph[0] : ((gph.min !== undefined && gph.min !== null) ? gph.min : 0.0);
+        this.gphMax = Array.isArray(gph) ? gph[1] : ((gph.max !== undefined && gph.max !== null) ? gph.max : 10000.0);
+
+        // 전지구 데이터셋 판정 (경도 350도 이상 또는 위도 170도 이상)
+        this.isGlobal = (this.lon2 - this.lon1 >= 350.0) || (this.lat2 - this.lat1 >= 170.0);
+
+        if (!this.particleCountConfigured) {
+            this.particleCount = this.rawParticleCount || (this.isGlobal ? 60000 : 20000);
+        }
 
         // 레벨별 실제 기압고도 (m). metadata.gphByLevel 이 없으면 gphMin~gphMax 선형 보간으로 생성
         let gbl = meta.gphByLevel;
@@ -287,10 +298,14 @@ export class GpuParticleEngine {
     /**
      * 도메인 크기에 맞는 바운딩 스피어 계산.
      * 도메인 4개 모서리(상단 고도)까지의 최대 거리 + 마진.
-     * (고정 3000km는 한반도 크롭 영역에만 적합 — 전체 영역 데이터 시 가장자리 파티클이 컬링됨)
+     * 전지구(isGlobal)는 지구 중심(0,0,0)을 기준으로 전체 대기층을 감싸는 구를 생성해 카메라 컬링 방지.
      */
     computeDomainBoundingSphere(centerCartesian) {
         const maxH = this.gphMax * this.heightScale;
+        if (this.isGlobal) {
+            const earthRadius = 6378137.0;
+            return new Cesium.BoundingSphere(Cesium.Cartesian3.ZERO, earthRadius + maxH + 1000000.0);
+        }
         const corners = [
             Cesium.Cartesian3.fromDegrees(this.lon1, this.lat1, maxH),
             Cesium.Cartesian3.fromDegrees(this.lon2, this.lat1, maxH),
@@ -339,33 +354,53 @@ export class GpuParticleEngine {
         const centerLon = (this.lon1 + this.lon2) / 2.0;
         const centerLat = (this.lat1 + this.lat2) / 2.0;
         const centerHeight = (this.gphMax * this.heightScale) / 2.0;
-        const centerCartesian = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, centerHeight);
+        const centerCartesian = this.isGlobal
+            ? Cesium.Cartesian3.ZERO
+            : Cesium.Cartesian3.fromDegrees(centerLon, centerLat, centerHeight);
         const boundingSphere = this.computeDomainBoundingSphere(centerCartesian);
+
+        const lat1Rad = this.lat1 * Math.PI / 180.0;
+        const lat2Rad = this.lat2 * Math.PI / 180.0;
+        const sinLat1 = Math.sin(lat1Rad);
+        const sinLat2 = Math.sin(lat2Rad);
+        const sinLatDiff = sinLat2 - sinLat1;
+        const latSpan = this.lat2 - this.lat1;
 
         for (let i = 0; i < this.particleCount; i++) {
             const randI = Math.floor(Math.random() * this.iCount);
-            const randJ = Math.floor(Math.random() * this.jCount);
             const randK = Math.floor(Math.random() * this.levelCount);
 
-            const dataIdx = (randK * this.jCount * this.iCount + randJ * this.iCount + randI) * 4;
-            const u = dataView[dataIdx] || 0.0;
-            const v = dataView[dataIdx + 1] || 0.0;
-            const w = dataView[dataIdx + 2] || 0.0;
+            let normY, randJ;
+            if (this.isGlobal || Math.abs(sinLatDiff) > 0.001) {
+                // 구면 면적 가중 위도 샘플링 (cos(lat) 비례 Inverse CDF)
+                // 전지구/광역에서 극점 집중을 해소하고 구면 단위 면적당 균일 밀도 보장
+                const u = Math.random();
+                const sinLat = sinLat1 + u * sinLatDiff;
+                const latRad = Math.asin(Math.max(-1.0, Math.min(1.0, sinLat)));
+                const lat = latRad * 180.0 / Math.PI;
+                randJ = Math.round((lat - this.lat1) / latSpan * (this.jCount - 1));
+                randJ = Math.max(0, Math.min(this.jCount - 1, randJ));
+                normY = this.jCount > 1 ? randJ / (this.jCount - 1) : 0;
+            } else {
+                randJ = Math.floor(Math.random() * this.jCount);
+                normY = this.jCount > 1 ? randJ / (this.jCount - 1) : 0;
+            }
 
+            const dataIdx = (randK * this.jCount * this.iCount + randJ * this.iCount + randI) * 4;
+            const u_val = dataView[dataIdx] || 0.0;
+            const v_val = dataView[dataIdx + 1] || 0.0;
+            const w_val = dataView[dataIdx + 2] || 0.0;
             const normX = this.iCount > 1 ? randI / (this.iCount - 1) : 0;
-            const normY = this.jCount > 1 ? randJ / (this.jCount - 1) : 0;
             const normZ = this.levelCount > 1 ? randK / (this.levelCount - 1) : 0;
             const randTime = Math.random() * 100.0;
 
             // 파티클 A: 전체 바람 (u, v, w) / 파티클 B: w 전용 (0, 0, w)
             const particles = [
-                { idx: i * 2, vel: [u, v, w], kind: 0.0 },
-                { idx: i * 2 + 1, vel: [0.0, 0.0, w], kind: 1.0 }
+                { idx: i * 2, vel: [u_val, v_val, w_val], kind: 0.0 },
+                { idx: i * 2 + 1, vel: [0.0, 0.0, w_val], kind: 1.0 }
             ];
-
             for (const pt of particles) {
                 const idx = pt.idx;
-
                 headPositions[idx * 3 + 0] = centerCartesian.x;
                 headPositions[idx * 3 + 1] = centerCartesian.y;
                 headPositions[idx * 3 + 2] = centerCartesian.z;
@@ -491,6 +526,7 @@ export class GpuParticleEngine {
             uniform float u_heightScale;
             uniform vec2 u_lonRange;
             uniform vec2 u_latRange;
+            uniform vec2 u_moveScale;
             uniform vec2 u_gphRange;
             uniform vec3 u_layerMask;
             uniform vec2 u_layerBounds;
@@ -503,7 +539,7 @@ export class GpuParticleEngine {
             uniform float u_spiralTurns;
  
             ${dynamicShaderLib}
- 
+
             void main() {
                 // Layer visibility filter (based on starting level)
                 float layerMask = 0.0;
@@ -519,7 +555,7 @@ export class GpuParticleEngine {
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
                     return;
                 }
- 
+
                 // 바람 성분 필터:
                 // - w 전용 파티클(kind=1): w만 체크(u,v off) 시에만 표시
                 // - 전체 파티클(kind=0): u 또는 v 체크 시에만 표시 (모두 off 시에는 표시 안 함)
@@ -531,7 +567,7 @@ export class GpuParticleEngine {
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
                     return;
                 }
- 
+
                 // 성분 필터: 체크된 성분(u/v/w)만 속도에 적용
                 vec3 vel = vec3(velocity.x * u_componentMask.x,
                                 velocity.y * u_componentMask.y,
@@ -540,7 +576,7 @@ export class GpuParticleEngine {
                 if (kind > 0.5) {
                     vel.z *= u_componentGain.z;
                 }
- 
+
                 // 풍속 필터: [u_speedRange.x, u_speedRange.y] 범위 밖 파티클은 숨김
                 // w 전용 파티클(kind=1)은 순수 |w| 기준으로 필터/색상 계산 (w gain 증폭 전 원본 속도 사용)
                 float speed = (kind > 0.5) ? abs(velocity.z) : length(vel);
@@ -549,12 +585,13 @@ export class GpuParticleEngine {
                     v_color = vec4(0.0, 0.0, 0.0, 0.0);
                     return;
                 }
- 
+
                 float baseProgress = fract(u_time * 0.1 * u_speedFactor + randTime);
                 float lifeProgress = max(0.0, baseProgress - segmentRatio * ${GpuParticleEngine.CONFIG.TAIL_LENGTH});
- 
-                vec3 currentPos = normCoord + vel * (lifeProgress * 0.0005 * u_speedFactor);
- 
+
+                vec3 move = vec3(vel.x * u_moveScale.x, vel.y * u_moveScale.y, vel.z * 0.0005) * (lifeProgress * u_speedFactor);
+                vec3 currentPos = normCoord + move;
+
                 // 나선(사이클론) offset: 특정 풍속 이상 전체 파티클(kind=0)만 적용
                 if (u_spiralOn > 0.5 && kind < 0.5) {
                     float spiralAmt = smoothstep(u_spiralThreshold, u_spiralThreshold + 10.0, speed);
@@ -567,14 +604,14 @@ export class GpuParticleEngine {
                         currentPos += (side1 * cos(phase) + side2 * sin(phase)) * (u_spiralRadius * spiralAmt);
                     }
                 }
- 
+
                 float lon = mix(u_lonRange.x, u_lonRange.y, currentPos.x);
-                float lat = mix(u_latRange.x, u_latRange.y, currentPos.y);
+                float lat = clamp(mix(u_latRange.x, u_latRange.y, currentPos.y), -89.9, 89.9);
                 float gph = sampleGph(currentPos.z);
-  
+ 
                 vec3 cartesianPos = geodeticToCartesian(vec3(lon, lat, gph * u_heightScale));
                 gl_Position = czm_modelViewProjection * vec4(cartesianPos, 1.0);
-  
+ 
                 vec3 color = getShaderColor(speed);
                 float alpha = (1.0 - segmentRatio) * smoothstep(0.0, 0.1, baseProgress) * (1.0 - smoothstep(0.9, 1.0, baseProgress));
                 v_color = vec4(color, clamp(alpha * 0.8, 0.0, 1.0));
@@ -626,6 +663,7 @@ export class GpuParticleEngine {
             uniform float u_pointSize;
             uniform vec2 u_lonRange;
             uniform vec2 u_latRange;
+            uniform vec2 u_moveScale;
             uniform vec2 u_gphRange;
             uniform vec3 u_layerMask;
             uniform vec2 u_layerBounds;
@@ -686,9 +724,10 @@ export class GpuParticleEngine {
                 }
  
                 float baseProgress = fract(u_time * 0.1 * u_speedFactor + randTime);
- 
-                vec3 currentPos = normCoord + vel * (baseProgress * 0.0005 * u_speedFactor);
- 
+
+                vec3 move = vec3(vel.x * u_moveScale.x, vel.y * u_moveScale.y, vel.z * 0.0005) * (baseProgress * u_speedFactor);
+                vec3 currentPos = normCoord + move;
+
                 // 나선(사이클론) offset: 특정 풍속 이상 전체 파티클(kind=0)만 적용
                 if (u_spiralOn > 0.5 && kind < 0.5) {
                     float spiralAmt = smoothstep(u_spiralThreshold, u_spiralThreshold + 10.0, speed);
@@ -701,11 +740,11 @@ export class GpuParticleEngine {
                         currentPos += (side1 * cos(phase) + side2 * sin(phase)) * (u_spiralRadius * spiralAmt);
                     }
                 }
- 
+
                 float lon = mix(u_lonRange.x, u_lonRange.y, currentPos.x);
-                float lat = mix(u_latRange.x, u_latRange.y, currentPos.y);
+                float lat = clamp(mix(u_latRange.x, u_latRange.y, currentPos.y), -89.9, 89.9);
                 float gph = sampleGph(currentPos.z);
- 
+
                 vec3 cartesianPos = geodeticToCartesian(vec3(lon, lat, gph * u_heightScale));
                 gl_Position = czm_modelViewProjection * vec4(cartesianPos, 1.0);
  
@@ -755,6 +794,16 @@ export class GpuParticleEngine {
                     u_pointSize: function() { return self.pointSize; },
                     u_lonRange: function() { return new Cesium.Cartesian2(self.lon1, self.lon2); },
                     u_latRange: function() { return new Cesium.Cartesian2(self.lat1, self.lat2); },
+                    u_moveScale: function() {
+                        const refLonSpan = 44.058;
+                        const refLatSpan = 24.442;
+                        const deltaLon = Math.max(0.1, self.lon2 - self.lon1);
+                        const deltaLat = Math.max(0.1, self.lat2 - self.lat1);
+                        return new Cesium.Cartesian2(
+                            0.0005 * (refLonSpan / deltaLon),
+                            0.0005 * (refLatSpan / deltaLat)
+                        );
+                    },
                     u_gphRange: function() { return new Cesium.Cartesian2(self.gphMin, self.gphMax); },
                     u_gphByLevel: function() { return self.gphByLevel; },
                     u_levelCount: function() { return self.levelCount; },
@@ -800,7 +849,7 @@ export class GpuParticleEngine {
                     u_spiralRadius: function() {
                         // km → normalized space: domain width ≈ lonRange * 111 * cos(midLat)
                         const midLat = (self.lat1 + self.lat2) / 2.0;
-                        const domainKm = (self.lon2 - self.lon1) * 111.0 * Math.cos(midLat * Math.PI / 180.0);
+                        const domainKm = (self.lon2 - self.lon1) * 111.0 * Math.max(0.1, Math.cos(midLat * Math.PI / 180.0));
                         return domainKm > 0 ? self.spiralRadiusKm / domainKm : 0.0;
                     },
                     u_spiralTurns: function() {

@@ -12,24 +12,25 @@
 | 항목 | 내용 |
 |---|---|
 | 목적 | Cesium.js 지구본 위에 바람(U, V, W) 데이터를 파티클 애니메이션 + 3D 단면도로 시각화 |
-| 데이터 원천 | 기상청 수치모델 NetCDF — **3km** `r030_v040_easia_prs.2byte.ftXXX.nc` (Lambert conformal) + **8km** `g576_v091_easia_prs.2byte.ftXXX.nc` (regular lat-lon), 동아시아 전체 영역, 3시간 간격 예보 ft000~ft087 |
+| 데이터 원천 | 기상청 수치모델 NetCDF — **3km** `r030_v040_easia_prs.2byte.ftXXX.nc` (Lambert conformal) + **8km** `g576_v091_easia_prs.2byte.ftXXX.nc` (regular lat-lon, 동아시아) + **25km** `g576_v091_glob_prs.025deg.2byte.ftXXX.nc` (regular lat-lon, **전지구**), 3시간 간격 예보 ft000~ft087 |
 | 렌더링 | Cesium.js 1.119 (CDN 로드) + 커스텀 `Cesium.Primitive` / `DrawCommand` + 인라인 GLSL 셰이더 (WebGL2) |
 | 지형/위성 | 한국 지형 `/terrain/korea/v3/` (코드 구현, 현재 비활성), Mapbox Satellite / OpenStreetMap Streets (OSM) |
-| 영역 | 3km: 동아시아 전체 (103.97~148.03°E, 25.26~49.70°N, 1050×840×24) / 8km: 동아시아 전체 (77.75~174.17°E, 11.79~61.54°N, 1158×598×24), 24개 등압면(1000~50 hPa) |
+| 영역 | 3km: 동아시아 전체 (103.97~148.03°E, 25.26~49.70°N, 1050×840×24) / 8km: 동아시아 전체 (77.75~174.17°E, 11.79~61.54°N, 1158×598×24) / **25km: 전지구 (0~359.75°E, -90~90°N, 1440×721×24)**, 24개 등압면(1000~50 hPa) |
 | 고도 표현 | GPH(geopotential height, m) × `heightScale`(기본 20배, 10~70x) 과장. 레벨별 실제 고도는 `gphByLevel` 메타데이터에서 참조 |
 
 ### 데이터 파이프라인 흐름
 
 ```
-기상청 .nc (NetCDF)  [3km r030 / 8km g576]
+기상청 .nc (NetCDF)  [3km r030 / 8km g576 / 25km g576-glob]
    │  data-pipeline/nc2bin.py  (변수명 자동감지 + 4단계 UTC 일시 추출 + U,V,W,GPH 패킹)
+   │  모델 세분화: <model>-<domain> (r030-easia / g576-easia / g576-glob)
    ▼
-temp_data/wind3d/<model>/<date>/          (레거시: 단일 프레임)
+temp_data/wind3d/<model-domain>/<date>/   (레거시: 단일 프레임)
    ├── metadata.json          (bounds, range, plev, gphByLevel)
    └── wind_data_3d.bin       (Float32 [U,V,W,GPH] 인터리브)
 
-temp_data/wind3d/<model>/<initTime>/      (타임랩스 번들: 다중 프레임, 단일 파일)
-   └── wind_bundle_<model>_<initTime>.bin.gz
+temp_data/wind3d/<model-domain>/<initTime>/  (타임랩스 번들: 다중 프레임, 단일 파일)
+   └── wind_bundle_<model-domain>_<initTime>.bin.gz
        = JSON 헤더(1라인, 무압축) + '\n' + 프레임별 gzip 멤버 N개
        (멤버 = gzip 압축 uint16 [U,V,W,GPH] 인터리브)
    │  WindDataLoader.loadBundle() → FramePool (LRU 캐시 + 프리페치)
@@ -72,30 +73,25 @@ cesium-sky/
 │       ├── WindDataLoader.js       ← .bin/.json 로더 + 번들/프레임 로더 + FramePool
 │       ├── CesiumWindEngine3D.js   ← (레거시) 3D 텍스처 방식 — 미사용
 │       │
-│       ├── r030/2026-09-21/        ← 3km 레거시 데이터 (동아시아 전체, 1050×840×24)
-│       │   ├── metadata.json
-│       │   └── wind_data_3d.bin
+│       ├── r030-easia/2026092412/  ← 3km 타임랩스 번들 (r030 동아시아, 1050×840×24, 2프레임)
+│       │   └── wind_bundle_r030-easia_2026092412.bin.gz   (≈203 MB)
 │       │
-│       ├── r030/2026092118/        ← 3km 타임랩스 번들 (5프레임, uint16+gzip, 단일 파일)
-│       │   └── wind_bundle_r030_2026092118.bin.gz   (≈566 MB)
+│       ├── g576-easia/2026092412/  ← 8km 타임랩스 번들 (g576 동아시아, 1158×598×24, 2프레임)
+│       │   └── wind_bundle_g576-easia_2026092412.bin.gz   (≈186 MB)
 │       │
-│       ├── g576/2026-09-21/        ← 8km 레거시 데이터 (동아시아 전체, 1158×598×24)
-│       │   ├── metadata.json
-│       │   └── wind_data_3d.bin
-│       │
-│       └── g576/2026092118/        ← 8km 타임랩스 번들 (5프레임, uint16+gzip, 단일 파일)
-│           └── wind_bundle_g576_2026092118.bin.gz   (≈460 MB)
+│       └── g576-glob/2026092412/   ← 25km 타임랩스 번들 (g576 전지구, 1440×721×24, 2프레임)
+│           └── wind_bundle_g576-glob_2026092412.bin.gz   (≈293 MB)
 │
 └── plans-with-ai/                  ← ai agent 에서 사용하는 플랜 문서
     ├── view-analysis.md
     └── timelapse-bundle-plan.md    ← 타임랩스 번들 설계/구현 계획 문서
 ```
 
-> **출력 경로 규칙**:
-> - **레거시 (단일 프레임)**: `WIND3D_ROOT/<model>/<date>/` → `metadata.json` + `wind_data_3d.bin`
->   예: `temp_data/wind3d/r030/2026-09-21/`
-> - **타임랩스 번들 (다중 프레임)**: `WIND3D_ROOT/<model>/<initTime>/` → `wind_bundle_<model>_<initTime>.bin.gz` **단일 파일**
->   예: `temp_data/wind3d/r030/2026092118/wind_bundle_r030_2026092118.bin.gz`
+> **출력 경로 규칙** (모델 세분화: `<model-domain>` = r030-easia / g576-easia / g576-glob):
+> - **레거시 (단일 프레임)**: `WIND3D_ROOT/<model-domain>/<date>/` → `metadata.json` + `wind_data_3d.bin`
+>   예: `temp_data/wind3d/r030-easia/2026-09-24/`
+> - **타임랩스 번들 (다중 프레임)**: `WIND3D_ROOT/<model-domain>/<initTime>/` → `wind_bundle_<model-domain>_<initTime>.bin.gz` **단일 파일**
+>   예: `temp_data/wind3d/g576-glob/2026092412/wind_bundle_g576-glob_2026092412.bin.gz`
 
 ---
 
@@ -117,39 +113,51 @@ Cesium Viewer 생성 + UI 패널 + 엔진 부팅을 담당.
   - `loadDataset()` 시 데이터셋별 `camera`로 `flyTo` (2초):
     - `3km`: (126.0°E, 36.5°N, **15Mm**, heading 357.6, pitch -90) — 동아시아 직하방
     - `8km` (디폴트): (126.0°E, 36.5°N, **15Mm**, heading 357.6, pitch -90) — 동아시아 직하방
+    - `25km`: (126.0°E, 36.5°N, **30Mm**, heading 357.6, pitch -90) — 전지구 관측 (높은 고도)
   - **Home 버튼 인터셉트**: `DATASETS[currentDatasetKey].camera`로 `flyTo`
-- **DATASETS 레지스트리** (view.html 내 상수):
+- **DATASETS 레지스트리** (view.html 내 상수, `trg_dt`/`trg_date` 템플릿 기반):
   ```js
+  const trg_dt = '2026092412';   // YYYYMMDDHH
+  const trg_date = `${trg_dt.slice(0,4)}-${trg_dt.slice(4,6)}-${trg_dt.slice(6,8)}`;  // YYYY-MM-DD
   const DATASETS = {
     '3km': {
-      bundle: '/temp_data/wind3d/r030/2026092118/wind_bundle_r030_2026092118.bin.gz',  // 타임랩스 번들 (우선)
-      cacheKey: 'r030_2026092118',
-      json: '/temp_data/wind3d/r030/2026-09-21/metadata.json',           // 레거시 폴백
-      bin:  '/temp_data/wind3d/r030/2026-09-21/wind_data_3d.bin',
+      bundle: `/temp_data/wind3d/r030-easia/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
+      cacheKey: `r030-easia_${trg_dt}`,
+      json: `/temp_data/wind3d/r030-easia/${trg_date}/metadata.json`,   // 레거시 폴백
+      bin:  `/temp_data/wind3d/r030-easia/${trg_date}/wind_data_3d.bin`,
       label: '3km 격자 (r030 동아시아)',
-      camera: { lon: 126.0, lat: 36.5, height: 15000000 },
-      orientation: { heading: 357.6, pitch: -90, roll: 0 }
+      camera: { destination: { lon: 126.0, lat: 36.5, height: 15000000 },
+                orientation: { heading: 357.6, pitch: -90, roll: 0 } }
     },
     '8km': {
-      bundle: '/temp_data/wind3d/g576/2026092118/wind_bundle_g576_2026092118.bin.gz',
-      cacheKey: 'g576_2026092118',
-      json: '/temp_data/wind3d/g576/2026-09-21/metadata.json',
-      bin:  '/temp_data/wind3d/g576/2026-09-21/wind_data_3d.bin',
+      bundle: `/temp_data/wind3d/g576-easia/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
+      cacheKey: `g576-easia_${trg_dt}`,
+      json: `/temp_data/wind3d/g576-easia/${trg_date}/metadata.json`,
+      bin:  `/temp_data/wind3d/g576-easia/${trg_date}/wind_data_3d.bin`,
       label: '8km 격자 (g576 동아시아)',
-      camera: { lon: 126.0, lat: 36.5, height: 15000000 },
-      orientation: { heading: 357.6, pitch: -90, roll: 0 }
+      camera: { destination: { lon: 126.0, lat: 36.5, height: 15000000 },
+                orientation: { heading: 357.6, pitch: -90, roll: 0 } }
+    },
+    '25km': {
+      bundle: `/temp_data/wind3d/g576-glob/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
+      cacheKey: `g576-glob_${trg_dt}`,
+      json: `/temp_data/wind3d/g576-glob/${trg_date}/metadata.json`,
+      bin:  `/temp_data/wind3d/g576-glob/${trg_date}/wind_data_3d.bin`,
+      label: '25km 격자 (g576 글로벌)',
+      camera: { destination: { lon: 126.0, lat: 36.5, height: 30000000 },
+                orientation: { heading: 357.6, pitch: -90, roll: 0 } }
     }
   };
   ```
   - `bundle` 존재 시 타임랩스 번들 경로, 없으면 레거시 json/bin 경로
-  - `cacheKey`: `datasetCache` 키 (model+initTime) — 레거시 데이터셋은 `key` 자체 사용
+  - `cacheKey`: `datasetCache` 키 (model-domain+initTime) — 레거시 데이터셋은 `key` 자체 사용
 - **데이터 캐시 (`datasetCache`)**: `{ metadata, binaryData, framePool?, loader?, bundle? }` 메모리 캐싱 → 3km ↔ 8km 전환 시 재다운로드 없음
 - **브라우저 번들 캐시 (`bundleCache`)**: `WindDataLoader.js`의 `BundleCache` 싱글턴 — 번들 `.bin.gz`를 브라우저 스토리지에 저장해 리프레시 시 재다운로드 생략 (3.5절 참조). `loadDataset()`은 `fetchOrCache()` 경유로 캐시 히트 시 네트워크 fetch 자체를 건너뜀
 - **캐시 상태 표시**: dataset-info-panel의 `cache` 항목 (`#dataset-cache-status`) — `updateCacheStatusDisplay(bundleUrl, fromCache)`가 `bundleCache.totalSize()`로 **앱이 저장한 전체 번들 캐시 총량 + 개수 + 상태** 표시 (예: `1.12 GB (2) hit`). 상태: `hit`(이번 로딩이 캐시에서) / `cached`(캐시에 존재하나 이번 로딩은 네트워크) / `network`. 캐시 삭제 후에도 남은 총량으로 갱신
 - **파일 크기 표시**: "데이터셋 선택" 라벨 우측 (`#dataset-file-size`) — `formatFileSize(bytes)`가 로딩한 파일(번들/bin) 크기를 휴먼리더블로 표시 (≥1GB → `x.xx GB`, ≥1MB → `x.x MB`, 그 외 `x KB`). `loadDataset()`이 분기별 `fileSize` 추적 (인메모리 히트 → `datasetCache` entry의 `fileSize`, 번들 → `loader.cacheStatus.size`, 레거시 → `binaryData.byteLength`) 후 갱신
 - **캐시 삭제 UI**: dataset-select 아래 **접힌 "▸ 캐시 관리" 토글** (`#cache-mgmt-toggle`)을 먼저 눌러야 버튼 2개가 표시됨 (실수 방지 UX — `#cache-mgmt-body` 기본 `display:none`). `#btn-cache-delete-current` (현재 데이터셋 캐시 삭제), `#btn-cache-delete-all` (전체 삭제, confirm 다이얼로그). `deleteBundleCache(scope)`가 브라우저 캐시 + 인메모리 `datasetCache` + `framePool`을 **연동 삭제** (인메모리만 남으면 "삭제했는데도 메모리에서 서빙" 불일치 방지)
 - **UI 패널** (`#slider-panel`): 데이터셋 드롭다운, **타임랩스 섹션** (재생/정지, 속도 0.25~2fps, 프레임 슬라이더, validTime UTC/KST 표시), 고도 과장 슬라이더(10~70x, 기본 20x), 베이스맵, 3D 박스/레벨 텍스트 토글, 격자 시각화, 바람장 레이어(하/중/상층), 풍속 필터(듀얼 슬라이더 + 등급 프리셋), 단면도(X/Y/Z), 환경 조명
-- **8km 특별 처리**: 3D 범위 박스 + 단면도 UI 자동 숨김 (`display: none`)
+- **광역(8km/25km) 특별 처리**: 3D 범위 박스 + 단면도 UI 자동 숨김 (`display: none`) — 8km(easia)·25km(glob) 등 동아시아/전지구 광역 데이터셋에 적용
 - **엔진 부팅** (`loadDataset(key)`): stopTimelapse → destroy → cache/bundle/legacy fetch → info panel → clock sync → new Engine/Legend/Grid → `initTimelapseUI(!!framePool)` → UI 가시성 → legend update → camera flyTo
 - **타임랩스 컨트롤러** (view.html 내):
   - `tlState = { playing, timer, frameIndex, busy }` — `busy` 가드로 프레임 전환 중 중복 요청 방지
@@ -280,15 +288,18 @@ WIND_COLOR_MAP = [ {0: 회색}, {5: 시안}, {12: 파랑}, {20: 초록}, {30: �
 - **JOBS 배치** (상단 리스트) — 현재는 **번들 모드** (타임랩스용):
   ```python
   JOBS = [
-    { "model": "r030", "initTime": "2026092118", "bbox": {} },
-    { "model": "g576", "initTime": "2026092118", "bbox": {} },
+    { "model": "r030", "domain": "easia", "initTime": "2026092412", "bbox": {} },
+    { "model": "g576", "domain": "easia", "initTime": "2026092412", "bbox": {} },
+    { "model": "g576", "domain": "glob",  "initTime": "2026092412", "bbox": {} },
   ]
   ```
+  - `model`: 모델명 (`r030` / `g576`)
+  - `domain`: 도메인 세분화 키 (`easia` 동아시아 / `glob` 전지구) — **모델 세분화 키**로 `model_key = f"{model}-{domain}"` (예: `r030-easia`, `g576-glob`)
   - `initTime`: 초기화 시각 `YYYYMMDDHH` (동일 묶음의 기준)
-  - `inputs`: (선택) 명시적 .nc 경로 리스트. 미지정 시 `raw/` 자동 스캔 → `NC_FILE_PATTERN`(`^(?P<model>[a-z]+\d+)_v\d+_.+\.ft(?P<ft>\d{3})\.(?P<init>\d{10})\.nc$`)으로 (model, initTime) 그룹핑, ft 오름차순 정렬
+  - `inputs`: (선택) 명시적 .nc 경로 리스트. 미지정 시 `raw/` 자동 스캔 → `NC_FILE_PATTERN`(`^(?P<model>[a-z]+\d+)_v\d+_(?P<domain>[a-z]+)_prs\..+\.ft(?P<ft>\d{3})\.(?P<init>\d{10})\.nc$`)으로 **(model, domain, initTime) 그룹핑**, ft 오름차순 정렬
   - `bbox: {}` = 전체 영역 (크롭 없음)
-  - 출력: `WIND3D_ROOT/<model>/<initTime>/` (스크립트 기준 `../temp_data/wind3d/...`)
-    - `wind_bundle_<model>_<initTime>.bin.gz` **단일 파일** (JSON 헤더 1라인 + `'\n'` + 프레임별 gzip 멤버 N개)
+  - 출력: `WIND3D_ROOT/<model-domain>/<initTime>/` (스크립트 기준 `../temp_data/wind3d/...`)
+    - `wind_bundle_<model-domain>_<initTime>.bin.gz` **단일 파일** (JSON 헤더 1라인 + `'\n'` + 프레임별 gzip 멤버 N개)
 
 - **번들 변환** (`convert_bundle(job, out_dir)`):
   - 프레임마다 `read_frame_from_nc()` → `pack_uint16_frame()` → `gzip.compress()` 멤버 (메모리 버퍼링)
@@ -374,8 +385,8 @@ wind_bundle_<model>_<initTime>.bin.gz
 
 ```json
 {
-  "model": "r030",
-  "initTime": "2026092118",
+  "model": "r030-easia",
+  "initTime": "2026092412",
   "dtype": "uint16",
   "layout": "interleaved_uvwgph",
   "channels": ["u", "v", "w", "gph"],
@@ -407,13 +418,15 @@ wind_bundle_<model>_<initTime>.bin.gz
 
 ### 4.4 현재 데이터 요약
 
-| 모델 | 격자 | 영역 | initTime | 프레임 | gphByLevel[0]→[-1] |
+| 모델-도메인 | 격자 | 영역 | initTime | 프레임 | gphByLevel[0]→[-1] |
 |---|---|---|---|---|---|
-| r030 (3km) | 1050×840×24 | 103.97~148.03°E, 25.26~49.70°N | 2026092118 | 5개 (ft001~005, 19:00Z~23:00Z) | 114m → 20520m |
-| g576 (8km) | 1158×598×24 | 77.75~174.17°E, 11.79~61.54°N | 2026092118 | 5개 (ft001~005, 19:00Z~23:00Z) | 121m → 20796m |
+| r030-easia (3km) | 1050×840×24 | 103.97~148.03°E, 25.26~49.70°N | 2026092412 | 2개 (ft000, ft001) | 114m → 20520m |
+| g576-easia (8km) | 1158×598×24 | 77.75~174.17°E, 11.79~61.54°N | 2026092412 | 2개 (ft000, ft006) | 121m → 20796m |
+| g576-glob (25km) | 1440×721×24 | 0~359.75°E, -90~90°N (전지구) | 2026092412 | 2개 (ft000, ft006) | 전지구 |
 
-- 번들 파일 크기 (5프레임 단일 파일): r030 ≈ 566 MB, g576 ≈ 460 MB (프레임당 gzip 멤버 r030 ≈ 113 MB / g576 ≈ 92 MB, 프레임당 uint16 원본 340MB/268MB → gzip)
-- 레거시 데이터(`wind_data_3d.bin` + `metadata.json`)는 별도 `2026-09-21/` 디렉터리에만 존재 (번들 디렉터리에는 번들 파일 1개만 출력)
+- 번들 파일 크기 (2프레임 단일 파일): r030-easia ≈ 203 MB, g576-easia ≈ 186 MB, g576-glob ≈ 293 MB
+- **25km(g576-glob) 원본 검증**: `g576_v091_glob_prs.025deg.2byte.ft000.2026092412.nc` — lons 0.0~359.75 (n=1440), lats -90.0~90.0 (n=721), fill/누락값 없음, 극점·전 경도에서 u/v/w/hgt 유효 → **원본이 완전한 전지구 데이터** (변환/소스 누락 아님)
+- 레거시 데이터(`wind_data_3d.bin` + `metadata.json`)는 별도 `<date>/` 디렉터리에만 존재 (번들 디렉터리에는 번들 파일 1개만 출력)
 
 ---
 
@@ -424,22 +437,23 @@ wind_bundle_<model>_<initTime>.bin.gz
 3. **고도 과장**: `gph * heightScale` (기본 20~30x). 레벨별 실제 고도는 `gphByLevel` 참조 (선형 보간 아님).
 4. **컬러맵 단일 소스**: `WIND_COLOR_MAP`이 JS(단면 픽셀, DOM 범례) + GLSL(자동 생성) 양쪽 기준.
 5. **커스텀 DrawCommand 패턴**: `primitive.update()` 오버라이드 → 매 프레임 uniform 갱신 + commandList push.
-6. **데이터-코드 분리**: .bin/.json은 `/temp_data/wind3d/<model>/<date>/`에서 로드. 데이터 교체 = 파일 교체.
-7. **다중 데이터셋**: `DATASETS` 레지스트리 + `loadDataset(key)` 런타임 전환. `[U,V,W,GPH]` 계약은 모델 무관 — 8km의 `hgt`가 `GPH` 슬롯으로 매핑됨 (물리량 동일: geopotential height, m).
-8. **격자 구조 자동 감지**: `nc2bin.py`가 변수명 + 좌표 차원(2D/1D) 자동 감지 → 3km(Lambert)·8km(lat-lon) 동일 파이프라인.
-9. **gphByLevel**: 레벨별 평균 고도를 metadata에 저장 → 프론트엔드 셰이더/라벨/격자가 실제 고도 사용 (선형 보간 오류 제거).
-10. **4단계 일시 추출**: NC 내부 `Times`/`time`/`current_time`/파일명 순으로 UTC 일시 추출 → 출력 디렉토리명(`<date>`) 결정.
-11. **메모리 캐싱**: `datasetCache`로 바이너리+메타 보관 → 전환 시 재요청 없음.
-12. **Cesium 시계 동기화**: `clock.currentTime = metadata.date_utc`, `shouldAnimate = false` → 해당 시각 태양광 재현.
-13. **독립 시각화 모듈**: 파티클(`GpuParticleEngine`) / 박스+라벨(`WindLegendBox`) / 격자(`GridVisualizer`) 분리.
-14. **타임랩스 uint16+gzip**: 프레임당 채널별 `min/step` 스케일링으로 uint16 양자화 (65535 단계) + gzip → 프레임당 340MB→113MB (r030). 정밀도 손실은 `max|Δ|` 검증으로 확인 (m/s 기준 ~0.001 이하). **int16 사용 금지** — 32768~65534 구간이 음수로 랩어라운드 (6.1절 사고 기록 참조).
-15. **단일 파일 번들**: 동일 model+initTime 묶음은 `wind_bundle_<model>_<initTime>.bin.gz` **파일 1개** (JSON 헤더 1라인 + `'\n'` + 프레임별 gzip 멤버 N개). 관리 단순화 — 플레이에 사용되는 nc가 10개여도 파일 1개. `gzOffset`/`gzSize`는 멤버 영역(헤더 이후) 기준 → 헤더 크기와 무관.
-16. **프레임별 스케일**: 스케일 파라미터가 프레임마다 다르므로 파일 내 헤더 `frames[].scale`에 저장, 프론트엔드 `restoreFrame()`이 `min + uint16*step`로 복원.
-17. **FramePool LRU**: 캐시 용량 5, `Map` 삽입 순서 = LRU (hit 시 MRU 재삽입), `inflight` Map으로 동시 요청 중복 제거, `prefetchAround(idx)`로 ±1 프레임 선제 로드 → 재생 시 프레임 전환 지연 최소화.
-18. **gzip 디컴프레션**: `DecompressionStream('gzip')` 우선, 미지원 브라우저는 pako 2.1.0 UMD (jsdelivr CDN) 동적 스크립트 주입 폴백. 멀티 멤버 gzip 스트림 — 멤버 슬라이스 후 개별 디컴프레션.
-19. **`setFrame()` 재생성 패턴**: 프레임 전환 시 `binaryData`/`gphByLevel` 교체 후 `createParticlePrimitives()` + `updateSlicePlanes()` 재실행. `gphByLevel`은 유니폼 클로저(`() => self.gphByLevel`)로 새 배열 자동 반영.
-20. **cacheKey**: `ds.cacheKey || key`로 캐시 키 결정 — 번들 데이터셋은 `r030_2026092118` 식별자 사용, legacy는 기존 key. `datasetCache` 값에 `framePool`/`loader`/`bundle` 포함.
-21. **브라우저 번들 캐시 (fetchOrCache 추상화)**: 번들 `.bin.gz` 다운로드를 `fetchOrCache()`로 통일 — Cache API(secure context) → IndexedDB(내부망 http 폴백) → none 3모드. 리프레시 시 이미 받은 번들은 브라우저 스토리지에서 재사용 (566MB+ 재다운로드 제거). URL에 initTime 포함으로 새 예보는 자연 무효화. 쿼타 초과 시 put 실패를 잡아 그레이셜 디그레이드. 캐시 삭제 UI(현재/전체)는 인메모리 `datasetCache`+`framePool`과 연동 삭제.
+6. **데이터-코드 분리**: .bin/.json은 `/temp_data/wind3d/<model-domain>/<date>/`에서 로드. 데이터 교체 = 파일 교체.
+7. **다중 데이터셋**: `DATASETS` 레지스트리 + `loadDataset(key)` 런타임 전환. `[U,V,W,GPH]` 계약은 모델 무관 — g576(easia/glob)의 `hgt`가 `GPH` 슬롯으로 매핑됨 (물리량 동일: geopotential height, m).
+8. **격자 구조 자동 감지**: `nc2bin.py`가 변수명 + 좌표 차원(2D/1D) 자동 감지 → 3km(Lambert)·8km/25km(lat-lon) 동일 파이프라인.
+9. **모델 세분화 (model-domain)**: `r030-easia` / `g576-easia` / `g576-glob` 식별자로 도메인별 분리 — 동일 모델의 easia/glob 파일이 자동 스캔 시 섞이는 충돌 방지. `model_key = f"{model}-{domain}"`가 출력 경로/파일명/헤더 `model` 필드/`cacheKey`에 사용.
+10. **gphByLevel**: 레벨별 평균 고도를 metadata에 저장 → 프론트엔드 셰이더/라벨/격자가 실제 고도 사용 (선형 보간 오류 제거).
+11. **4단계 일시 추출**: NC 내부 `Times`/`time`/`current_time`/파일명 순으로 UTC 일시 추출 → 출력 디렉토리명(`<date>`) 결정.
+12. **메모리 캐싱**: `datasetCache`로 바이너리+메타 보관 → 전환 시 재요청 없음.
+13. **Cesium 시계 동기화**: `clock.currentTime = metadata.date_utc`, `shouldAnimate = false` → 해당 시각 태양광 재현.
+14. **독립 시각화 모듈**: 파티클(`GpuParticleEngine`) / 박스+라벨(`WindLegendBox`) / 격자(`GridVisualizer`) 분리.
+15. **타임랩스 uint16+gzip**: 프레임당 채널별 `min/step` 스케일링으로 uint16 양자화 (65535 단계) + gzip → 프레임당 340MB→113MB (r030). 정밀도 손실은 `max|Δ|` 검증으로 확인 (m/s 기준 ~0.001 이하). **int16 사용 금지** — 32768~65534 구간이 음수로 랩어라운드 (6.1절 사고 기록 참조).
+16. **단일 파일 번들**: 동일 model-domain+initTime 묶음은 `wind_bundle_<model-domain>_<initTime>.bin.gz` **파일 1개** (JSON 헤더 1라인 + `'\n'` + 프레임별 gzip 멤버 N개). 관리 단순화 — 플레이에 사용되는 nc가 10개여도 파일 1개. `gzOffset`/`gzSize`는 멤버 영역(헤더 이후) 기준 → 헤더 크기와 무관.
+17. **프레임별 스케일**: 스케일 파라미터가 프레임마다 다르므로 파일 내 헤더 `frames[].scale`에 저장, 프론트엔드 `restoreFrame()`이 `min + uint16*step`로 복원.
+18. **FramePool LRU**: 캐시 용량 5, `Map` 삽입 순서 = LRU (hit 시 MRU 재삽입), `inflight` Map으로 동시 요청 중복 제거, `prefetchAround(idx)`로 ±1 프레임 선제 로드 → 재생 시 프레임 전환 지연 최소화.
+19. **gzip 디컴프레션**: `DecompressionStream('gzip')` 우선, 미지원 브라우저는 pako 2.1.0 UMD (jsdelivr CDN) 동적 스크립트 주입 폴백. 멀티 멤버 gzip 스트림 — 멤버 슬라이스 후 개별 디컴프레션.
+20. **`setFrame()` 재생성 패턴**: 프레임 전환 시 `binaryData`/`gphByLevel` 교체 후 `createParticlePrimitives()` + `updateSlicePlanes()` 재실행. `gphByLevel`은 유니폼 클로저(`() => self.gphByLevel`)로 새 배열 자동 반영.
+21. **cacheKey**: `ds.cacheKey || key`로 캐시 키 결정 — 번들 데이터셋은 `r030-easia_2026092412` 식별자 사용, legacy는 기존 key. `datasetCache` 값에 `framePool`/`loader`/`bundle` 포함.
+22. **브라우저 번들 캐시 (fetchOrCache 추상화)**: 번들 `.bin.gz` 다운로드를 `fetchOrCache()`로 통일 — Cache API(secure context) → IndexedDB(내부망 http 폴백) → none 3모드. 리프레시 시 이미 받은 번들은 브라우저 스토리지에서 재사용 (재다운로드 제거). URL에 initTime 포함으로 새 예보는 자연 무효화. 쿼타 초과 시 put 실패를 잡아 그레이셜 디그레이드. 캐시 삭제 UI(현재/전체)는 인메모리 `datasetCache`+`framePool`과 연동 삭제.
 
 ---
 
@@ -453,7 +467,7 @@ wind_bundle_<model>_<initTime>.bin.gz
 | 4 | 기압면 라벨 DOM(24개 hPa) 하드코딩 — metadata `plev`와 동기화 안 됨 | `createLegendOverlay()` |
 | 5 | `CesiumWindEngine3D.js`는 미사용 레거시 | `front/temp_data/wind3d/` |
 | 6 | 새 ftXXX 시간 스텝 추가 시 `JOBS` 리스트에 항목 추가 필요 | `nc2bin.py` |
-| 7 | 8km 광역 데이터는 3D 박스/단면도 UI 자동 숨김 | `view.html` |
+| 7 | 광역(8km/25km) 데이터는 3D 박스/단면도 UI 자동 숨김 | `view.html` |
 | 8 | `ncHeaderViwer.py` 파일명 오타 (Viewer → Viwer) | `data-pipeline/` |
 | 9 | 프레임 전환 시 `createParticlePrimitives()` + `updateSlicePlanes()` 전체 재실행 (CPU 비용) — 재생 중 `busy` 가드로 직렬화 | `GpuParticleEngine.setFrame()` |
 | 10 | pako 폴백은 CDN 의존 — 오프라인 환경에서는 `DecompressionStream` 미지원 브라우저가 gzip 디컴프레션 불가 | `WindDataLoader.loadPako()` |
@@ -461,6 +475,7 @@ wind_bundle_<model>_<initTime>.bin.gz
 | 12 | serve.py는 Range 요청 미지원 → 번들은 **전체 파일 fetch** (5프레임: r030 566MB / g576 460MB, 초기 로딩 1회). **리프레시 재다운로드는 `bundleCache`(Cache API/IndexedDB)로 제거됨** — 1회 다운로드 후 브라우저 스토리지 재사용 | `serve.py` / `WindDataLoader.loadBundle()` / `BundleCache` |
 | 13 | 브라우저 스토리지 쿼타 부족 시 번들 캐시 저장 실패 (console.warn 후 캐시 없이 동작 — 그레이셜 디그레이드). 1GB+ 번들 2종 동시 캐싱은 쿼타 여유 필요 | `BundleCache.put()` |
 | 14 | Cache API/SW는 non-secure context(`http://10.x.x.x`)에서 불가 → IndexedDB 폴백이 필수. `bundleCache.mode`로 현재 모드 확인 가능 | `BundleCache._init()` |
+| 15 | **25km 전지구(g576-glob) 파티클 미생성 현상** ✅ **해결 완료** (2026-10): 5개 근본 원인 수정 — ① `0.0 \|\| 124.0` falsy 버그로 `lon1=0°`가 `124°`로 오설정 → `nullish` 체크 수정 ② 전지구 바운딩 스피어를 지구 중심(`ZERO`) 기준으로 변경 ③ 이동 스케일 `u_moveScale = (refLonSpan/deltaLon, refLatSpan/deltaLat) * 0.0005`로 도메인 크기 보정 ④ 구면 면적 가중 위도 샘플링(sin(lat) Inverse CDF) 적용 ⑤ 전지구 파티클 수 60,000으로 증가. 자세한 내용은 6.2절 참조. | `GpuParticleEngine.js` `parseMetadata` / `computeDomainBoundingSphere` / `createParticlePrimitives` / `tailVS` / `headVS` / `uniformMap` / `view.html` `DATASETS['25km']` |
 
 ### 6.1 사고 기록: int16 오버플로 데이터 손상 (2026-09)
 
@@ -475,6 +490,36 @@ wind_bundle_<model>_<initTime>.bin.gz
 - **검증**: 멤버별 디컴프레션 후 채널별 min/max 비교 (r030: u[-29.54,53.16]→[-27.14,55.56], gph[-124,20637]; g576: u[-34.50,74.82]→[-32.10,77.22], gph[-247,20934]) — ALL OK (검증용 스크립트 `_verify_bundle.py`는 사용 후 삭제)
 - **교훈**: 16비트 양자화 시 값이 0~65534 전체 범위를 사용하므로 **부호 없는(uint16) 타입이 필수**. int16은 0~32767만 표현 가능.
 
+### 6.2 25km 전지구(g576-glob) 데이터 추가 & 지구본 일부 영역 파티클 미생성 현상 (2026-09)
+
+**배경**: `g576_v091_glob_prs.025deg.2byte.ft000.2026092412.nc` (25km 전지구 격자)를 뷰어에 추가하기 위해 모델 세분화(`r030-easia` / `g576-easia` / `g576-glob`)를 도입하고 `25km` 데이터셋을 등록함.
+
+**모델 세분화 (model-domain)**:
+- `nc2bin.py`의 `NC_FILE_PATTERN`이 `_v<ver>_` 이후의 도메인 토큰(`easia`/`glob`)을 `domain` 그룹으로 캡처 → `scan_raw_groups()`가 **(model, domain, initTime)** 으로 그룹핑 (기존 (model, initTime) 대비).
+- `convert_bundle()`에서 `model_key = f"{model}-{domain}"` → 헤더 `model` 필드 + 출력 경로/파일명(`wind_bundle_<model_key>_<initTime>.bin.gz`, `WIND3D_ROOT/<model_key>/<initTime>/`)에 사용.
+- **핵심 효과**: 동일 모델(g576)의 `easia`/`glob` 파일이 자동 스캔 시 한 그룹에 섞이는 충돌을 근본적으로 제거 (도메인별 분리).
+- `view.html`의 `DATASETS`에 `25km` 항목(`g576-glob` 번들, 카메라 height 30Mm) + 드롭다운 `<option>` 추가.
+
+**원본 데이터 검증 (전지구 완전함 확인)**:
+- `g576-glob` 원본 NC: lons 0.0~359.75 (n=1440), lats -90.0~90.0 (n=721), **fill/누락값 없음**, 극점(북극/남극) 및 전 경도(0,30,…,330°)에서 u/v/w/hgt 모두 유효.
+- 번들 헤더도 전지구 bounds(`lon 0~359.75`, `lat -90~90`, 1440×721×24)를 정확히 반영.
+- **결론**: "지구본 일부 영역에 파티클이 안 생기는" 현상은 **데이터 변환 오류도, 원본 소스의 영역 누락도 아님** — 원본은 완전한 전지구 데이터.
+
+**근본 원인 분석 (5개) & 해결 완료 (2026-10)**:
+
+| # | 원인 | 코드 | 수정 내용 |
+|---|---|---|---|
+| 1 | **`lon1=0.0` falsy 버그** (`0.0 \|\| 124.0 = 124.0`) — 경도 0°~124°E 전체가 렌더링 도메인에서 제외됨. 서해(124°E)가 시작점처럼 보인 이유 | `parseMetadata()` | `b.lon1 \|\| 124.0` → `(b.lon1 !== undefined && b.lon1 !== null) ? Number(b.lon1) : 124.0` |
+| 2 | **바운딩 스피어 중심이 태평양** — 전지구 `centerCartesian`이 한반도 부근으로 계산되어 반대편 대서양/유럽 지역이 카메라 frustum 컬링에서 제거됨 | `computeDomainBoundingSphere()` / `createParticlePrimitives()` | 전지구 분기: `centerCartesian = Cesium.Cartesian3.ZERO`, BoundingSphere 반경 = `earthRadius + maxH + 1,000,000m` |
+| 3 | **이동 스케일 8배 왜곡** — 셰이더 `vel * 0.0005`가 정규화 공간 이동이므로, 경도 범위 360°(전지구) vs 44°(동아시아)에서 8배 더 멀리 이동 → 파티클이 순식간에 화면을 가로질러 보이지 않음 | `tailVS` / `headVS` / `uniformMap` | `u_moveScale = vec2(0.0005 * refLonSpan/deltaLon, 0.0005 * refLatSpan/deltaLat)` (refLon=44.058°, refLat=24.442° — 3km 동아시아 기준 역방향 호환) |
+| 4 | **균일 위도 샘플링 → 극점 집중** — `randJ = floor(random * jCount)` 는 경도 방향이 수렴하는 극점에 동아시아와 동일한 밀도로 파티클을 배치 → 중위도 희소, 극권 과밀 | `createParticlePrimitives()` | sin(lat) Inverse CDF: `sinLat = sinLat1 + u*(sinLat2-sinLat1)`, `lat = asin(sinLat)` → 구면 면적에 비례한 균일 분포 |
+| 5 | **파티클 수 부족** — 기본 20,000개는 3km 동아시아용; 전지구는 표면적이 60배 | `view.html` `DATASETS['25km']` / `GpuParticleEngine` constructor | `particleCount: 60000` 명시; 엔진 내부도 `isGlobal` 시 60,000 자동 적용 |
+
+**추가 수정**:
+- `tailVS` `main()` 전면 재작성: 레이어/성분/풍속 필터 적용, `lat clamp(-89.9, 89.9)`, `u_moveScale` 통합.
+- `headVS`에도 `u_moveScale` 통합 (기존 단순 `vel * 0.0005` 제거).
+- `view.html` `loadDataset()`: `new GpuParticleEngine(viewer, metadata, binaryData, ds.particleCount)` — 데이터셋별 파티클 수 전달.
+
 ---
 
 ## 7. 향후 코딩 시 체크리스트
@@ -486,8 +531,9 @@ wind_bundle_<model>_<initTime>.bin.gz
 - [ ] 좌표 변환: 정규화(0~1) → `mix(range)` → `geodeticToCartesian` 순서 유지
 - [ ] 고도 렌더링은 항상 `* heightScale` 적용, 레벨별 고도는 `gphByLevel` 참조
 - [ ] UI 컨트롤은 `window.particleEngine` / `window.legendBoxInstance` / `window.gridVisualizer` 경유
-- [ ] 데이터 파일 교체 후 `metadata.json` + `wind_data_3d.bin` 짝 갱신 (`temp_data/wind3d/<model>/<date>/`)
-- [ ] 번들 데이터셋 추가 시 `DATASETS`에 `bundle` + `cacheKey` 필드 + 드롭다운 `<option>` + `nc2bin.py` `JOBS` 갱신
+- [ ] 데이터 파일 교체 후 `metadata.json` + `wind_data_3d.bin` 짝 갱신 (`temp_data/wind3d/<model-domain>/<date>/`)
+- [ ] 번들 데이터셋 추가 시 `DATASETS`에 `bundle` + `cacheKey` 필드 + 드롭다운 `<option>` + `nc2bin.py` `JOBS`(`model`+`domain`) 갱신 — 모델 세분화 키는 `<model>-<domain>` (r030-easia / g576-easia / g576-glob)
+- [ ] 전지구(glob) 데이터셋 추가 시 극점 경도 수렴에 따른 파티클 밀도 불균형(6.2절) 고려 — 위도 가중 샘플링 등 시각적 보완 필요
 - [ ] 번들 헤더 스키마 변경 시 `WindDataLoader.loadBundle()`/`restoreFrame()` + `view.html` 번들→엔진 메타데이터 브리지(`range.gph`, `gphByLevel`) 함께 갱신
 - [ ] 프레임 재생 로직 변경 시 `FramePool` LRU/inflight/prefetchAround 계약 유지, `setFrame()` 호출 후 `prefetchAround()` 호출
 - [ ] 번들 다운로드 경로 변경 시 `fetchOrCache()` 추상화 유지 (Cache API → IndexedDB 폴백 3모드) — `loadBundle()`은 직접 fetch 금지

@@ -24,13 +24,22 @@ JOBS = [
     {
         # 3km 격자 (r030 동아시아) — 전체 영역 (크롭 없음)
         "model": "r030",
-        "initTime": "2026092118",
+        "domain": "easia",
+        "initTime": "2026092412",
         "bbox": {},
     },
     {
         # 8km 격자 (g576 동아시아) — 전체 영역 (크롭 없음)
         "model": "g576",
-        "initTime": "2026092118",
+        "domain": "easia",
+        "initTime": "2026092412",
+        "bbox": {},
+    },
+    {
+        # 25km 격자 (g576 글로벌) — 전체 영역 (크롭 없음)
+        "model": "g576",
+        "domain": "glob",
+        "initTime": "2026092412",
         "bbox": {},
     },
 ]
@@ -57,9 +66,10 @@ DEFAULT_PLEV = [1000, 975, 950, 925, 900, 850, 800, 750, 700,
 # 프레임 채널 순서 (인터리브 레이아웃: [u, v, w, gph] × N 포인트)
 CHANNELS = ("u", "v", "w", "gph")
 
-# raw/ 파일명 패턴: <model>_v<ver>_...ft<XXX>.<YYYYMMDDHH>.nc
+# raw/ 파일명 패턴: <model>_v<ver>_<domain>_...ft<XXX>.<YYYYMMDDHH>.nc
+#   domain: easia (동아시아) / glob (글로벌) — 모델 세분화 키
 NC_FILE_PATTERN = re.compile(
-    r'^(?P<model>[a-z]+\d+)_v\d+_.+\.ft(?P<ft>\d{3})\.(?P<init>\d{10})\.nc$'
+    r'^(?P<model>[a-z]+\d+)_v\d+_(?P<domain>[a-z]+)_prs\..+\.ft(?P<ft>\d{3})\.(?P<init>\d{10})\.nc$'
 )
 
 
@@ -190,11 +200,11 @@ def compute_bbox_slice(lons, lats, bbox):
 # ====================================================
 # [자동 스캔] raw/ 디렉터리 → (model, initTime) 그룹핑
 # ====================================================
-def scan_raw_groups(raw_dir=RAW_DIR, model=None, init_time=None):
+def scan_raw_groups(raw_dir=RAW_DIR, model=None, domain=None, init_time=None):
     """
     raw/ 하위 디렉터리(backup 제외)의 .nc 파일을 파일명 패턴으로 스캔해
-    (model, initTime) → [(ft, path), ...] (ft 오름차순) 그룹으로 반환.
-    model / init_time 필터 지정 시 해당 그룹만 반환.
+    (model, domain, initTime) → [(ft, path), ...] (ft 오름차순) 그룹으로 반환.
+    model / domain / init_time 필터 지정 시 해당 그룹만 반환.
     """
     groups = {}
     if not os.path.isdir(raw_dir):
@@ -209,13 +219,16 @@ def scan_raw_groups(raw_dir=RAW_DIR, model=None, init_time=None):
             if not m:
                 continue
             g_model = m.group("model")
+            g_domain = m.group("domain")
             g_init = m.group("init")
             if model and g_model != model:
+                continue
+            if domain and g_domain != domain:
                 continue
             if init_time and g_init != init_time:
                 continue
             path = os.path.join(sub, fname)
-            groups.setdefault((g_model, g_init), []).append((int(m.group("ft")), path))
+            groups.setdefault((g_model, g_domain, g_init), []).append((int(m.group("ft")), path))
 
     for key in groups:
         groups[key].sort(key=lambda x: x[0])
@@ -334,16 +347,19 @@ def restore_float32_frame(uint16_bytes, scale):
 # ====================================================
 def convert_bundle(job, out_dir):
     """
-    job = {model, initTime, inputs?, bbox?}
-    출력: <out_dir>/wind_bundle_<model>_<initTime>.bin.gz (단일 파일)
+    job = {model, domain, initTime, inputs?, bbox?}
+    출력: <out_dir>/wind_bundle_<model>-<domain>_<initTime>.bin.gz (단일 파일)
       = 1라인 JSON 헤더 + b'\\n' + 프레임별 gzip 멤버 N개 (multi-member gzip)
       - 헤더: {model, initTime, dtype, layout, channels, iCount, jCount,
-               levelCount, bounds, plev, frames:[{ft, validTime, gzOffset,
-               gzSize, scale, gphByLevel}]}
+                levelCount, bounds, plev, frames:[{ft, validTime, gzOffset,
+                gzSize, scale, gphByLevel}]}
+      - model 필드: '<model>-<domain>' (예: g576-glob)
       - gzOffset/gzSize: 멤버 영역(헤더+\\n 이후) 기준 상대 오프셋/크기
         → 헤더 크기와 무관하게 오프셋이 유효 (순환 의존 회피)
     """
     model = job["model"]
+    domain = job.get("domain", "")
+    model_key = f"{model}-{domain}" if domain else model
     init_time = job["initTime"]
     bbox = job.get("bbox", {})
 
@@ -352,10 +368,10 @@ def convert_bundle(job, out_dir):
     if inputs:
         frame_paths = [(None, _resolve(p)) for p in inputs]
     else:
-        groups = scan_raw_groups(model=model, init_time=init_time)
-        key = (model, init_time)
+        groups = scan_raw_groups(model=model, domain=domain or None, init_time=init_time)
+        key = (model, domain, init_time)
         if key not in groups or not groups[key]:
-            print(f"[에러] raw/ 에서 {model}/{init_time} 묶음 파일 없음 — 스킵")
+            print(f"[에러] raw/ 에서 {model_key}/{init_time} 묶음 파일 없음 — 스킵")
             return
         frame_paths = groups[key]
 
@@ -368,7 +384,7 @@ def convert_bundle(job, out_dir):
         frames.append((ft, path))
     frames.sort(key=lambda x: x[0])
 
-    print(f"== {model} {init_time} 번들 변환 ({len(frames)}프레임) ==")
+    print(f"== {model_key} {init_time} 번들 변환 ({len(frames)}프레임) ==")
     os.makedirs(out_dir, exist_ok=True)
 
     frame_metas = []
@@ -422,7 +438,7 @@ def convert_bundle(job, out_dir):
 
     # 단일 번들 파일: 1라인 JSON 헤더 + b'\n' + gzip 멤버 N개
     header = {
-        "model": model,
+        "model": model_key,
         "initTime": init_time,
         "dtype": "uint16",
         "layout": "interleaved_uvwgph",
@@ -431,7 +447,7 @@ def convert_bundle(job, out_dir):
         "frames": frame_metas,
     }
     header_bytes = json.dumps(header, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    bundle_path = os.path.join(out_dir, f"wind_bundle_{model}_{init_time}.bin.gz")
+    bundle_path = os.path.join(out_dir, f"wind_bundle_{model_key}_{init_time}.bin.gz")
     with open(bundle_path, "wb") as f:
         f.write(header_bytes)
         f.write(b"\n")
@@ -439,19 +455,21 @@ def convert_bundle(job, out_dir):
             f.write(member)
 
     total_size = os.path.getsize(bundle_path)
-    print(f"--> [완료] {model}/{init_time}: {len(frames)}프레임, "
+    print(f"--> [완료] {model_key}/{init_time}: {len(frames)}프레임, "
           f"단일 파일 {total_size / 1024 / 1024:.1f} MB")
     print(f"--> [출력] {bundle_path}")
     print()
 
 
 if __name__ == "__main__":
-    # 출력 경로: front/temp_data/wind3d/<model>/<initTime>/  (스크립트 기준 ../temp_data/...)
+    # 출력 경로: front/temp_data/wind3d/<model>-<domain>/<initTime>/  (스크립트 기준 ../temp_data/...)
     WIND3D_ROOT = os.path.join(SCRIPT_DIR, "..", "temp_data", "wind3d")
 
     for job in JOBS:
         model = job.get("model", "wind")
+        domain = job.get("domain", "")
+        model_key = f"{model}-{domain}" if domain else model
         init_time = job.get("initTime", "latest")
-        out_dir = os.path.join(WIND3D_ROOT, model, init_time)
+        out_dir = os.path.join(WIND3D_ROOT, model_key, init_time)
 
         convert_bundle(job, out_dir)

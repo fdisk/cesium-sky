@@ -624,6 +624,7 @@
             <select id="dataset-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
                 <option value="3km">3km 격자 (r030 동아시아)</option>
                 <option value="8km" selected>8km 격자 (g576 동아시아)</option>
+                <option value="25km">25km 격자 (g576 글로벌)</option>
             </select>
             <div style="margin-top:4px;">
                 <span id="cache-mgmt-toggle" style="font-size:9px; color:#64748b; cursor:pointer; user-select:none;">▸ 캐시 관리</span>
@@ -1108,12 +1109,16 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         return buffer.buffer;
     }
 
+    const trg_dt = '2026092412';
+    // trg_dt(YYYYMMDDHH)를 기반으로 YYYY-MM-DD 경로용 날짜 문자열 자동 생성
+    const trg_date = `${trg_dt.slice(0, 4)}-${trg_dt.slice(4, 6)}-${trg_dt.slice(6, 8)}`;
+
     const DATASETS = {
         '3km': {
-            bundle: '/temp_data/wind3d/r030/2026092118/wind_bundle_r030_2026092118.bin.gz',
-            cacheKey: 'r030_2026092118',
-            json: '/temp_data/wind3d/r030/2026-09-21/metadata.json',
-            bin:  '/temp_data/wind3d/r030/2026-09-21/wind_data_3d.bin',
+            bundle: `/temp_data/wind3d/r030-easia/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
+            cacheKey: `r030-easia_${trg_dt}`,
+            json: `/temp_data/wind3d/r030-easia/${trg_date}/metadata.json`,
+            bin:  `/temp_data/wind3d/r030-easia/${trg_date}/wind_data_3d.bin`,
             label: '3km 격자 (r030 동아시아)',
             camera: {
                 destination: { lon: 126.0, lat: 36.5, height: 15000000 },
@@ -1121,13 +1126,25 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             }
         },
         '8km': {
-            bundle: '/temp_data/wind3d/g576/2026092118/wind_bundle_g576_2026092118.bin.gz',
-            cacheKey: 'g576_2026092118',
-            json: '/temp_data/wind3d/g576/2026-09-21/metadata.json',
-            bin:  '/temp_data/wind3d/g576/2026-09-21/wind_data_3d.bin',
+            bundle: `/temp_data/wind3d/g576-easia/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
+            cacheKey: `g576-easia_${trg_dt}`,
+            json: `/temp_data/wind3d/g576-easia/${trg_date}/metadata.json`,
+            bin:  `/temp_data/wind3d/g576-easia/${trg_date}/wind_data_3d.bin`,
             label: '8km 격자 (g576 동아시아)',
             camera: {
                 destination: { lon: 126.0, lat: 36.5, height: 15000000 },
+                orientation: { heading: 357.6, pitch: -90, roll: 0 }
+            }
+        },
+        '25km': {
+            bundle: `/temp_data/wind3d/g576-glob/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
+            cacheKey: `g576-glob_${trg_dt}`,
+            json: `/temp_data/wind3d/g576-glob/${trg_date}/metadata.json`,
+            bin:  `/temp_data/wind3d/g576-glob/${trg_date}/wind_data_3d.bin`,
+            label: '25km 격자 (g576 글로벌)',
+            particleCount: 60000,
+            camera: {
+                destination: { lon: 126.0, lat: 36.5, height: 30000000 },
                 orientation: { heading: 357.6, pitch: -90, roll: 0 }
             }
         }
@@ -1380,7 +1397,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 viewer.clock.shouldAnimate = false;
             }
 
-            windEngine = new GpuParticleEngine(viewer, metadata, binaryData);
+            windEngine = new GpuParticleEngine(viewer, metadata, binaryData, ds.particleCount);
             window.particleEngine = windEngine;
 
             initTimelapseUI(!!framePool);
@@ -1435,6 +1452,32 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                     spiralTurnsSlider ? parseFloat(spiralTurnsSlider.value) : 1.5
                 );
             }
+
+            // ─── 25km 전지구 전용 디폴트 설정 ───────────────────────────
+            // 전지구 데이터셋 선택 시 아래 3가지 옵션을 자동으로 off 적용
+            if (key === '25km') {
+                // 1. 고도 레벨 텍스트 → off
+                const _legendTextToggle = document.getElementById('toggle-legend-text');
+                if (_legendTextToggle && _legendTextToggle.checked) {
+                    _legendTextToggle.checked = false;
+                    _legendTextToggle.dispatchEvent(new Event('change'));
+                }
+
+                // 2. 격자 시각화 → off
+                const _gridToggle = document.getElementById('toggle-grid');
+                if (_gridToggle && _gridToggle.checked) {
+                    _gridToggle.checked = false;
+                    _gridToggle.dispatchEvent(new Event('change'));
+                }
+
+                // 3. 단면도 레이어 그룹 전체 → off
+                const _allSlicesToggle = document.getElementById('toggle-all-slices');
+                if (_allSlicesToggle && _allSlicesToggle.checked) {
+                    _allSlicesToggle.checked = false;
+                    _allSlicesToggle.dispatchEvent(new Event('change'));
+                }
+            }
+            // ─────────────────────────────────────────────────────────────
 
             updateHtmlLegendFromEngine(windEngine);
 

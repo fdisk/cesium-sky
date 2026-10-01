@@ -3,7 +3,7 @@ import xarray as xr
 # 지역모델 동아시아 3km 격자 데이터
 # file_path = "./raw/20260914/r030_v040_easia_prs.2byte.ft000.2026091412.nc" 
 # 지역모델 동아시아 8km 격자 데이터
-file_path = "./raw/20260922/g576_v091_easia_prs.2byte.ft000.2026092118.nc"
+file_path = "./raw/20260924/g576_v091_glob_prs.025deg.2byte.ft000.2026092412.nc"
 
 ds = xr.open_dataset(file_path)
 
