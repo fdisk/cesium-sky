@@ -113,50 +113,43 @@ Cesium Viewer 생성 + UI 패널 + 엔진 부팅을 담당.
     - `8km` (디폴트): (126.0°E, 36.5°N, **15Mm**, heading 357.6, pitch -90) — 동아시아 직하방
     - `25km`: (126.0°E, 36.5°N, **30Mm**, heading 357.6, pitch -90) — 전지구 관측 (높은 고도)
   - **Home 버튼 인터셉트**: `DATASETS[currentDatasetKey].camera`로 `flyTo`
-- **DATASETS 레지스트리** (view.html 내 상수, `trg_dt`/`trg_date` 템플릿 기반):
+- **BUNDLE_MANIFEST** (view.html 내 상수, 개발자가 직접 수정): 날짜(`YYYY-MM-DD`) → 해당 날짜에 존재하는 `initTime`(`YYYYMMDDHH`) 리스트. `nc2bin.py`로 새 데이터 생성 시 여기에 항목을 추가. **글로벌 매니페스트** — 날짜가 존재하면 3개 데이터셋(3km/8km/25km) 모두 해당 initTime에 번들이 있다고 가정 (nc2bin.py가 3개 모델을 동시에 변환).
   ```js
-  const trg_dt = '2026092412';   // YYYYMMDDHH
-  const trg_date = `${trg_dt.slice(0,4)}-${trg_dt.slice(4,6)}-${trg_dt.slice(6,8)}`;  // YYYY-MM-DD
-  const DATASETS = {
-    '3km': {
-      bundle: `/temp_data/wind3d/bundle-data/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
-      cacheKey: `r030-easia_${trg_dt}`,
-      json: `/temp_data/wind3d/r030-easia/${trg_date}/metadata.json`,   // 레거시 폴백
-      bin:  `/temp_data/wind3d/r030-easia/${trg_date}/wind_data_3d.bin`,
-      label: '3km 격자 (r030 동아시아)',
-      camera: { destination: { lon: 126.0, lat: 36.5, height: 15000000 },
-                orientation: { heading: 357.6, pitch: -90, roll: 0 } }
-    },
-    '8km': {
-      bundle: `/temp_data/wind3d/bundle-data/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
-      cacheKey: `g576-easia_${trg_dt}`,
-      json: `/temp_data/wind3d/g576-easia/${trg_date}/metadata.json`,
-      bin:  `/temp_data/wind3d/g576-easia/${trg_date}/wind_data_3d.bin`,
-      label: '8km 격자 (g576 동아시아)',
-      camera: { destination: { lon: 126.0, lat: 36.5, height: 15000000 },
-                orientation: { heading: 357.6, pitch: -90, roll: 0 } }
-    },
-    '25km': {
-      bundle: `/temp_data/wind3d/bundle-data/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
-      cacheKey: `g576-glob_${trg_dt}`,
-      json: `/temp_data/wind3d/g576-glob/${trg_date}/metadata.json`,
-      bin:  `/temp_data/wind3d/g576-glob/${trg_date}/wind_data_3d.bin`,
-      label: '25km 격자 (g576 글로벌)',
-      camera: { destination: { lon: 126.0, lat: 36.5, height: 30000000 },
-                orientation: { heading: 357.6, pitch: -90, roll: 0 } }
-    }
+  const BUNDLE_MANIFEST = {
+      "2026-09-24": ["2026092400", "2026092412"],
+      // "2026-09-25": ["2026092500", "2026092512"],
   };
   ```
-  - `bundle` 존재 시 타임랩스 번들 경로, 없으면 레거시 json/bin 경로
-  - `cacheKey`: `datasetCache` 키 (model-domain+initTime) — 레거시 데이터셋은 `key` 자체 사용
+- **DATASETS 레지스트리** (view.html 내 상수, `modelKey` 기반 — initTime별 동적 경로 생성):
+  ```js
+  const DATASETS = {
+    '3km':  { modelKey: 'r030-easia', label: '3km 격자 (r030 동아시아)',
+              camera: { destination: { lon: 126.0, lat: 36.5, height: 7000000 },
+                       orientation: { heading: 357.6, pitch: -90, roll: 0 } } },
+    '8km':  { modelKey: 'g576-easia', label: '8km 격자 (g576 동아시아)',
+              camera: { destination: { lon: 126.0, lat: 36.5, height: 15000000 },
+                       orientation: { heading: 357.6, pitch: -90, roll: 0 } } },
+    '25km': { modelKey: 'g576-glob',  label: '25km 격자 (g576 글로벌)', particleCount: 60000,
+              camera: { destination: { lon: 126.0, lat: 36.5, height: 15000000 },
+                       orientation: { heading: 357.6, pitch: -90, roll: 0 } } }
+  };
+  ```
+  - `bundle`/`cacheKey`/`json`/`bin` 필드 제거 — initTime별 번들 경로·캐시 키는 헬퍼가 동적 생성:
+    - `getBundleUrl(key, initTime)` → `${WIND3D_ROOT}/bundle-data/<initTime>/wind_bundle_<modelKey>_<initTime>.bin.gz`
+    - `getCacheKey(key, initTime)` → `<modelKey>_<initTime>`
+    - `getInitTimesForDate(dateStr)` → `BUNDLE_MANIFEST[dateStr]` (없으면 `null`)
+    - `getLatestInitTimeForDate(dateStr)` → 해당 날짜의 최신 initTime (`YYYYMMDDHH`는 문자열 비교로 정렬)
+    - `getLatestBundleInfo()` → 매니페스트 전체에서 최신 날짜 + 그 날짜의 최신 initTime (`{ date, initTime }`, 비어있으면 `null`)
+  - `currentInitTime` 상태 변수가 현재 선택된 initTime 보유 — `loadDataset(key, initTime?)`은 미지정 시 `currentInitTime` 사용
+- **날짜 선택 캘린더** (`#bundle-calendar`, slider-panel 상단): 월별 그리드(일~토) + 이전/다음 달 내비게이션. `BUNDLE_MANIFEST`에 데이터가 있는 날짜만 파란색(`has-data`)으로 표시·클릭 가능, 선택일은 강조(`selected`). 날짜 클릭 시 **해당 날짜의 최신 initTime**을 현재 데이터셋으로 로드. `#cal-status`에 선택 날짜의 initTime 리스트 표시. 부팅 시 `getLatestBundleInfo()`로 최신 날짜를 선택 상태로 동기화
 - **데이터 캐시 (`datasetCache`)**: `{ metadata, binaryData, framePool?, loader?, bundle? }` 메모리 캐싱 → 3km ↔ 8km 전환 시 재다운로드 없음
 - **브라우저 번들 캐시 (`bundleCache`)**: `WindDataLoader.js`의 `BundleCache` 싱글턴 — 번들 `.bin.gz`를 브라우저 스토리지에 저장해 리프레시 시 재다운로드 생략 (3.5절 참조). `loadDataset()`은 `fetchOrCache()` 경유로 캐시 히트 시 네트워크 fetch 자체를 건너뜀
 - **캐시 상태 표시**: dataset-info-panel의 `cache` 항목 (`#dataset-cache-status`) — `updateCacheStatusDisplay(bundleUrl, fromCache)`가 `bundleCache.totalSize()`로 **앱이 저장한 전체 번들 캐시 총량 + 개수 + 상태** 표시 (예: `1.12 GB (2) hit`). 상태: `hit`(이번 로딩이 캐시에서) / `cached`(캐시에 존재하나 이번 로딩은 네트워크) / `network`. 캐시 삭제 후에도 남은 총량으로 갱신
 - **파일 크기 표시**: "데이터셋 선택" 라벨 우측 (`#dataset-file-size`) — `formatFileSize(bytes)`가 로딩한 파일(번들/bin) 크기를 휴먼리더블로 표시 (≥1GB → `x.xx GB`, ≥1MB → `x.x MB`, 그 외 `x KB`). `loadDataset()`이 분기별 `fileSize` 추적 (인메모리 히트 → `datasetCache` entry의 `fileSize`, 번들 → `loader.cacheStatus.size`, 레거시 → `binaryData.byteLength`) 후 갱신
 - **캐시 삭제 UI**: dataset-select 아래 **접힌 "▸ 캐시 관리" 토글** (`#cache-mgmt-toggle`)을 먼저 눌러야 버튼 2개가 표시됨 (실수 방지 UX — `#cache-mgmt-body` 기본 `display:none`). `#btn-cache-delete-current` (현재 데이터셋 캐시 삭제), `#btn-cache-delete-all` (전체 삭제, confirm 다이얼로그). `deleteBundleCache(scope)`가 브라우저 캐시 + 인메모리 `datasetCache` + `framePool`을 **연동 삭제** (인메모리만 남으면 "삭제했는데도 메모리에서 서빙" 불일치 방지)
-- **UI 패널** (`#slider-panel`): 데이터셋 드롭다운, **타임랩스 섹션** (재생/정지, 속도 0.25~2fps, 프레임 슬라이더, validTime UTC/KST 표시), 고도 과장 슬라이더(10~70x, 기본 20x), 베이스맵, 3D 박스/레벨 텍스트 토글, 격자 시각화, 바람장 레이어(하/중/상층), 풍속 필터(듀얼 슬라이더 + 등급 프리셋), 단면도(X/Y/Z), 환경 조명
+- **UI 패널** (`#slider-panel`): **날짜 선택 캘린더** (`#bundle-calendar`, 상단), 데이터셋 드롭다운, **타임랩스 섹션** (재생/정지, 속도 0.25~2fps, 프레임 슬라이더, validTime UTC/KST 표시), 고도 과장 슬라이더(10~70x, 기본 20x), 베이스맵, 3D 박스/레벨 텍스트 토글, 격자 시각화, 바람장 레이어(하/중/상층), 풍속 필터(듀얼 슬라이더 + 등급 프리셋), 단면도(X/Y/Z), 환경 조명
 - **광역(8km/25km) 특별 처리**: 3D 범위 박스 + 단면도 UI 자동 숨김 (`display: none`) — 8km(easia)·25km(glob) 등 동아시아/전지구 광역 데이터셋에 적용
-- **엔진 부팅** (`loadDataset(key)`): stopTimelapse → destroy → cache/bundle/legacy fetch → info panel → clock sync → new Engine/Legend/Grid → `initTimelapseUI(!!framePool)` → UI 가시성 → legend update → camera flyTo
+- **엔진 부팅** (`loadDataset(key, initTime?, skipFlyTo?)`): initTime 미지정 시 `currentInitTime` 사용 → `getBundleUrl`/`getCacheKey` 동적 생성 → stopTimelapse → destroy → cache/bundle fetch → info panel → clock sync → new Engine/Legend/Grid → `initTimelapseUI(!!framePool)` → UI 가시성 → legend update → camera flyTo. **디폴트 부팅**: `getLatestBundleInfo()`로 최신 날짜의 최신 initTime 번들 로드 + 캘린더 동기화
 - **타임랩스 컨트롤러** (view.html 내):
   - `tlState = { playing, timer, frameIndex, busy }` — `busy` 가드로 프레임 전환 중 중복 요청 방지
   - `applyFrame(idx)`: `framePool.get(idx)` → `windEngine.setFrame(idx, data, gphByLevel)` → `prefetchAround(idx)` → UI 갱신
@@ -436,7 +429,7 @@ wind_bundle_<model>_<initTime>.bin.gz
 3. **고도 과장**: `gph * heightScale` (기본 20~30x). 레벨별 실제 고도는 `gphByLevel` 참조 (선형 보간 아님).
 4. **컬러맵 단일 소스**: `WIND_COLOR_MAP`이 JS(단면 픽셀, DOM 범례) + GLSL(자동 생성) 양쪽 기준.
 5. **커스텀 DrawCommand 패턴**: `primitive.update()` 오버라이드 → 매 프레임 uniform 갱신 + commandList push.
-6. **데이터-코드 분리**: .bin/.json은 `/temp_data/wind3d/<model-domain>/<date>/`에서 로드, 번들은 `/temp_data/wind3d/bundle-data/<initTime>/`에서 로드. 데이터 교체 = 파일 교체.
+6. **데이터-코드 분리**: 번들은 `/temp_data/wind3d/bundle-data/<initTime>/`에서 로드 (레거시 .bin/.json은 `/temp_data/wind3d/<model-domain>/<date>/`). `BUNDLE_MANIFEST`가 사용 가능한 날짜/initTime의 단일 소스 — 새 데이터 추가 = 번들 파일 + 매니페스트 항목 추가.
 7. **다중 데이터셋**: `DATASETS` 레지스트리 + `loadDataset(key)` 런타임 전환. `[U,V,W,GPH]` 계약은 모델 무관 — g576(easia/glob)의 `hgt`가 `GPH` 슬롯으로 매핑됨 (물리량 동일: geopotential height, m).
 8. **격자 구조 자동 감지**: `nc2bin.py`가 변수명 + 좌표 차원(2D/1D) 자동 감지 → 3km(Lambert)·8km/25km(lat-lon) 동일 파이프라인.
 9. **모델 세분화 (model-domain)**: `r030-easia` / `g576-easia` / `g576-glob` 식별자로 도메인별 분리 — 동일 모델의 easia/glob 파일이 자동 스캔 시 섞이는 충돌 방지. `model_key = f"{model}-{domain}"`가 파일명/헤더 `model` 필드/`cacheKey`에 사용.
@@ -451,8 +444,9 @@ wind_bundle_<model>_<initTime>.bin.gz
 18. **FramePool LRU**: 캐시 용량 5, `Map` 삽입 순서 = LRU (hit 시 MRU 재삽입), `inflight` Map으로 동시 요청 중복 제거, `prefetchAround(idx)`로 ±1 프레임 선제 로드 → 재생 시 프레임 전환 지연 최소화.
 19. **gzip 디컴프레션**: `DecompressionStream('gzip')` 우선, 미지원 브라우저는 pako 2.1.0 UMD (jsdelivr CDN) 동적 스크립트 주입 폴백. 멀티 멤버 gzip 스트림 — 멤버 슬라이스 후 개별 디컴프레션.
 20. **`setFrame()` 재생성 패턴**: 프레임 전환 시 `binaryData`/`gphByLevel` 교체 후 `createParticlePrimitives()` + `updateSlicePlanes()` 재실행. `gphByLevel`은 유니폼 클로저(`() => self.gphByLevel`)로 새 배열 자동 반영.
-21. **cacheKey**: `ds.cacheKey || key`로 캐시 키 결정 — 번들 데이터셋은 `r030-easia_2026092412` 식별자 사용, legacy는 기존 key. `datasetCache` 값에 `framePool`/`loader`/`bundle` 포함.
+21. **cacheKey**: `getCacheKey(key, initTime)` = `<modelKey>_<initTime>` (예: `r030-easia_2026092412`)로 `datasetCache` 키 결정. `datasetCache` 값에 `framePool`/`loader`/`bundle` 포함.
 22. **브라우저 번들 캐시 (fetchOrCache 추상화)**: 번들 `.bin.gz` 다운로드를 `fetchOrCache()`로 통일 — Cache API(secure context) → IndexedDB(내부망 http 폴백) → none 3모드. 리프레시 시 이미 받은 번들은 브라우저 스토리지에서 재사용 (재다운로드 제거). URL에 initTime 포함으로 새 예보는 자연 무효화. 쿼타 초과 시 put 실패를 잡아 그레이셜 디그레이드. 캐시 삭제 UI(현재/전체)는 인메모리 `datasetCache`+`framePool`과 연동 삭제.
+23. **BUNDLE_MANIFEST + 날짜 캘린더**: `BUNDLE_MANIFEST`(개발자 직접 수정)가 날짜→initTime 리스트의 단일 소스. `#bundle-calendar` 월별 그리드로 날짜 선택 → 해당 날짜의 **최신 initTime**을 현재 데이터셋으로 로드. 부팅 시 `getLatestBundleInfo()`로 최신 날짜의 최신 initTime 번들 디폴트 로드. 북마크는 `initTime`을 함께 저장/복원 (매니페스트에 없으면 그 날짜의 최신 initTime으로 폴백).
 
 ---
 
@@ -531,7 +525,8 @@ wind_bundle_<model>_<initTime>.bin.gz
 - [ ] 고도 렌더링은 항상 `* heightScale` 적용, 레벨별 고도는 `gphByLevel` 참조
 - [ ] UI 컨트롤은 `window.particleEngine` / `window.legendBoxInstance` / `window.gridVisualizer` 경유
 - [ ] 데이터 파일 교체 후 `metadata.json` + `wind_data_3d.bin` 짝 갱신 (`temp_data/wind3d/<model-domain>/<date>/`), 번들은 `temp_data/wind3d/bundle-data/<initTime>/`
-- [ ] 번들 데이터셋 추가 시 `DATASETS`에 `bundle` + `cacheKey` 필드 + 드롭다운 `<option>` + `nc2bin.py` `JOBS`(`model`+`domain`) 갱신 — 모델 세분화 키는 `<model>-<domain>` (r030-easia / g576-easia / g576-glob)
+- [ ] 번들 데이터셋 추가 시 `DATASETS`에 `modelKey` 필드 + 드롭다운 `<option>` + `nc2bin.py` `JOBS`(`model`+`domain`) 갱신 — 모델 세분화 키는 `<model>-<domain>` (r030-easia / g576-easia / g576-glob)
+- [ ] 새 날짜/initTime 데이터 추가 시 `BUNDLE_MANIFEST`에 항목 추가 (날짜 → initTime 리스트) — 캘린더가 데이터 있는 날짜만 표시하고, 부팅은 `getLatestBundleInfo()`로 최신 날짜 자동 로드
 - [ ] 전지구(glob) 데이터셋 추가 시 극점 경도 수렴에 따른 파티클 밀도 불균형(6.2절) 고려 — 위도 가중 샘플링 등 시각적 보완 필요
 - [ ] 번들 헤더 스키마 변경 시 `WindDataLoader.loadBundle()`/`restoreFrame()` + `view.html` 번들→엔진 메타데이터 브리지(`range.gph`, `gphByLevel`) 함께 갱신
 - [ ] 프레임 재생 로직 변경 시 `FramePool` LRU/inflight/prefetchAround 계약 유지, `setFrame()` 호출 후 `prefetchAround()` 호출

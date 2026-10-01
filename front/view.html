@@ -410,6 +410,14 @@
         font-size: 9px;
         color: #64748b;
     }
+    /* 북마크 데이터셋 라벨 색상 구분 (3km/8km/25km) */
+    .bookmark-time .bm-ds {
+        font-weight: bold;
+        color: #94a3b8; /* 미정의 데이터셋 기본색 */
+    }
+    .bookmark-time .bm-ds-3km { color: #34d399; }  /* emerald */
+    .bookmark-time .bm-ds-8km { color: #38bdf8; }  /* sky */
+    .bookmark-time .bm-ds-25km { color: #fbbf24; } /* amber */
     .bookmark-del-btn {
         background: transparent;
         border: none;
@@ -534,9 +542,88 @@
     }
 
     @keyframes loading-spin {
-        to { transform: rotate(360deg); }
-    }
-</style>
+            to { transform: rotate(360deg); }
+        }
+    
+        /* =========================================================
+           3. 번들 데이터 날짜 선택 캘린더 (slider-panel 상단)
+        ========================================================= */
+        #bundle-calendar {
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #475569;
+        }
+        #bundle-calendar .cal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        #bundle-calendar .cal-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #f8fafc;
+        }
+        #bundle-calendar .cal-nav-btn {
+            width: 24px;
+            height: 20px;
+            background: #1e293b;
+            color: #38bdf8;
+            border: 1px solid #475569;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        #bundle-calendar .cal-nav-btn:hover {
+            background: #334155;
+            color: #7dd3fc;
+        }
+        #bundle-calendar .cal-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+        #bundle-calendar .cal-dow {
+            font-size: 9px;
+            color: #64748b;
+            text-align: center;
+            padding: 2px 0;
+        }
+        #bundle-calendar .cal-day {
+            font-size: 10px;
+            text-align: center;
+            padding: 3px 0;
+            border-radius: 4px;
+            color: #475569;          /* 데이터 없음: 회색 */
+            background: transparent;
+            cursor: default;
+            user-select: none;
+        }
+        #bundle-calendar .cal-day.empty {
+            visibility: hidden;
+        }
+        #bundle-calendar .cal-day.has-data {
+            background: #0c4a6e;    /* 데이터 존재: 파란색 */
+            color: #e0f2fe;
+            cursor: pointer;
+        }
+        #bundle-calendar .cal-day.has-data:hover {
+            background: #075985;
+        }
+        #bundle-calendar .cal-day.selected {
+            background: #0284c7;    /* 선택됨: 더 밝은 강조 */
+            color: #fff;
+            font-weight: bold;
+            box-shadow: 0 0 0 1px #38bdf8;
+        }
+        #bundle-calendar .cal-status {
+            font-size: 9px;
+            color: #94a3b8;
+            margin-top: 4px;
+            font-family: Consolas, 'Courier New', monospace;
+        }
+    </style>
 </head>
 <body>
 <div id="cesiumContainer"></div>
@@ -615,10 +702,21 @@
 
     <div id="slider-panel-scroll">
 
-        <!-- 데이터셋 선택 -->
-        <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
-            <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
-                <span>데이터셋 선택</span>
+        <!-- 번들 데이터 날짜 선택 캘린더 -->
+                <div id="bundle-calendar">
+                    <div class="cal-header">
+                        <button id="cal-prev-month" class="cal-nav-btn" title="이전 달">◀</button>
+                        <span class="cal-title" id="cal-title">-</span>
+                        <button id="cal-next-month" class="cal-nav-btn" title="다음 달">▶</button>
+                    </div>
+                    <div class="cal-grid" id="cal-grid"></div>
+                    <div class="cal-status" id="cal-status">-</div>
+                </div>
+        
+                <!-- 데이터셋 선택 -->
+                <div style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #475569;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#f8fafc;">
+                        <span>데이터셋 선택</span>
                 <span id="dataset-file-size" title="로딩한 파일 크기" style="font-size:10px; color:#94a3b8; font-family:Consolas, 'Courier New', monospace;">-</span>
             </div>
             <select id="dataset-select" style="width:100%; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:11px;">
@@ -1064,9 +1162,10 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     });
 
     let windEngine = null;
-    let legendBox = null;
-    let gridVisualizer = null;
-    let currentDatasetKey = '3km';
+        let legendBox = null;
+        let gridVisualizer = null;
+        let currentDatasetKey = '3km';
+        let currentInitTime = null;  // 현재 선택된 initTime (YYYYMMDDHH)
 
     // 컨트롤 요소 참조
     const toggleLayerLow = document.getElementById('toggle-layer-low');
@@ -1116,40 +1215,76 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         return buffer.buffer;
     }
 
-    const trg_dt = '2026092412';
-    // trg_dt(YYYYMMDDHH)를 기반으로 YYYY-MM-DD 경로용 날짜 문자열 자동 생성
-    // const trg_date = `${trg_dt.slice(0, 4)}-${trg_dt.slice(4, 6)}-${trg_dt.slice(6, 8)}`;
-
-    const DATASETS = {
-        '3km': {
-            bundle: `${WIND3D_ROOT}/bundle-data/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
-            cacheKey: `r030-easia_${trg_dt}`,
-            label: '3km 격자 (r030 동아시아)',
-            camera: {
-                destination: { lon: 126.0, lat: 36.5, height: 7000000 },
-                orientation: { heading: 357.6, pitch: -90, roll: 0 }
+    // ─── 번들 데이터 매니페스트 (개발자가 직접 수정) ───────────────────
+        // 날짜(YYYY-MM-DD) → 해당 날짜에 존재하는 initTime(YYYYMMDDHH) 리스트
+        // nc2bin.py로 새 데이터 생성 시 여기에 항목을 추가한다.
+        // 글로벌 매니페스트: 날짜가 존재하면 3개 데이터셋(3km/8km/25km) 모두
+        // 해당 initTime에 번들이 있다고 가정 (nc2bin.py가 3개 모델을 동시에 변환).
+        const BUNDLE_MANIFEST = {
+            "2026-09-24": ["2026092400", "2026092412"],
+            "2026-10-01": ["2026100100"]
+        };
+    
+        // ─── 데이터셋 레지스트리 (initTime별 동적 경로 생성) ─────────────
+        const DATASETS = {
+            '3km': {
+                modelKey: 'r030-easia',
+                label: '3km 격자 (r030 동아시아)',
+                camera: {
+                    destination: { lon: 126.0, lat: 36.5, height: 7000000 },
+                    orientation: { heading: 357.6, pitch: -90, roll: 0 }
+                }
+            },
+            '8km': {
+                modelKey: 'g576-easia',
+                label: '8km 격자 (g576 동아시아)',
+                camera: {
+                    destination: { lon: 126.0, lat: 36.5, height: 15000000 },
+                    orientation: { heading: 357.6, pitch: -90, roll: 0 }
+                }
+            },
+            '25km': {
+                modelKey: 'g576-glob',
+                label: '25km 격자 (g576 글로벌)',
+                particleCount: 60000,
+                camera: {
+                    destination: { lon: 126.0, lat: 36.5, height: 15000000 },
+                    orientation: { heading: 357.6, pitch: -90, roll: 0 }
+                }
             }
-        },
-        '8km': {
-            bundle: `${WIND3D_ROOT}/bundle-data/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
-            cacheKey: `g576-easia_${trg_dt}`,
-            label: '8km 격자 (g576 동아시아)',
-            camera: {
-                destination: { lon: 126.0, lat: 36.5, height: 15000000 },
-                orientation: { heading: 357.6, pitch: -90, roll: 0 }
-            }
-        },
-        '25km': {
-            bundle: `${WIND3D_ROOT}/bundle-data/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
-            cacheKey: `g576-glob_${trg_dt}`,
-            label: '25km 격자 (g576 글로벌)',
-            particleCount: 60000,
-            camera: {
-                destination: { lon: 126.0, lat: 36.5, height: 15000000 },
-                orientation: { heading: 357.6, pitch: -90, roll: 0 }
-            }
+        };
+    
+        // ─── initTime 기반 동적 경로/키 생성 헬퍼 ────────────────────────
+        function getBundleUrl(datasetKey, initTime) {
+            return `${WIND3D_ROOT}/bundle-data/${initTime}/wind_bundle_${DATASETS[datasetKey].modelKey}_${initTime}.bin.gz`;
         }
-    };
+        function getCacheKey(datasetKey, initTime) {
+            return `${DATASETS[datasetKey].modelKey}_${initTime}`;
+        }
+    
+        // 날짜(YYYY-MM-DD) → initTime 리스트 (매니페스트에 없으면 null)
+        function getInitTimesForDate(dateStr) {
+            const list = BUNDLE_MANIFEST[dateStr];
+            return (list && list.length > 0) ? list : null;
+        }
+    
+        // 날짜의 최신 initTime (YYYYMMDDHH는 문자열 비교로 정렬 가능)
+        function getLatestInitTimeForDate(dateStr) {
+            const list = getInitTimesForDate(dateStr);
+            if (!list) return null;
+            return list.reduce((a, b) => (a > b ? a : b));
+        }
+    
+        // 매니페스트 전체에서 최신 날짜 + 그 날짜의 최신 initTime
+        // 매니페스트 비어있으면 null 반환
+        function getLatestBundleInfo() {
+            const dates = Object.keys(BUNDLE_MANIFEST)
+                .filter(d => getInitTimesForDate(d))
+                .sort();
+            if (dates.length === 0) return null;
+            const latestDate = dates[dates.length - 1];
+            return { date: latestDate, initTime: getLatestInitTimeForDate(latestDate) };
+        }
 
     const datasetCache = {};
     let framePool = null;
@@ -1280,23 +1415,25 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 framePool = null;
                 console.log('--> 브라우저 캐시 전체 삭제 완료');
             } else {
-                const ds = DATASETS[currentDatasetKey];
-                if (ds && ds.bundle) {
-                    await bundleCache.delete(ds.bundle);
-                }
-                const cacheKey = ds ? (ds.cacheKey || currentDatasetKey) : currentDatasetKey;
-                if (datasetCache[cacheKey]) {
-                    if (datasetCache[cacheKey].framePool) datasetCache[cacheKey].framePool.clear();
-                    delete datasetCache[cacheKey];
-                }
-                framePool = null;
-                console.log(`--> 브라우저 캐시 삭제: ${ds ? ds.bundle : currentDatasetKey}`);
-            }
-            // 삭제 후 캐시 상태 표시 갱신 (남은 캐시 총량 반영)
-            const ds = DATASETS[currentDatasetKey];
-            if (ds && ds.bundle) {
-                await updateCacheStatusDisplay(ds.bundle, false);
-            } else {
+                            const ds = DATASETS[currentDatasetKey];
+                            const bundleUrl = (ds && currentInitTime) ? getBundleUrl(currentDatasetKey, currentInitTime) : null;
+                            if (bundleUrl) {
+                                await bundleCache.delete(bundleUrl);
+                            }
+                            const cacheKey = (ds && currentInitTime) ? getCacheKey(currentDatasetKey, currentInitTime) : currentDatasetKey;
+                            if (datasetCache[cacheKey]) {
+                                if (datasetCache[cacheKey].framePool) datasetCache[cacheKey].framePool.clear();
+                                delete datasetCache[cacheKey];
+                            }
+                            framePool = null;
+                            console.log(`--> 브라우저 캐시 삭제: ${bundleUrl || currentDatasetKey}`);
+                        }
+                        // 삭제 후 캐시 상태 표시 갱신 (남은 캐시 총량 반영)
+                        const ds = DATASETS[currentDatasetKey];
+                        const bundleUrl = (ds && currentInitTime) ? getBundleUrl(currentDatasetKey, currentInitTime) : null;
+                        if (bundleUrl) {
+                            await updateCacheStatusDisplay(bundleUrl, false);
+                        } else {
                 const el = document.getElementById('dataset-cache-status');
                 if (el) el.textContent = '-';
             }
@@ -1305,13 +1442,25 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         }
     }
 
-    async function loadDataset(key, skipFlyTo = false) {
-        if (!viewer) return;
-        const ds = DATASETS[key];
-        if (!ds) return;
-
-        stopTimelapse();
-        framePool = null;
+    async function loadDataset(key, initTime, skipFlyTo = false) {
+            if (!viewer) return;
+            const ds = DATASETS[key];
+            if (!ds) return;
+    
+            // initTime 미지정 시 현재 선택된 initTime 사용 (디폴트)
+            initTime = initTime || currentInitTime;
+            if (!initTime) {
+                const statusEl = document.getElementById('dataset-status');
+                if (statusEl) statusEl.textContent = '로드 불가: initTime 없음 (BUNDLE_MANIFEST 확인)';
+                return;
+            }
+            currentInitTime = initTime;
+    
+            const bundleUrl = getBundleUrl(key, initTime);
+            const cacheKey = getCacheKey(key, initTime);
+    
+            stopTimelapse();
+            framePool = null;
 
         const statusEl = document.getElementById('dataset-status');
         if (statusEl) statusEl.textContent = `${ds.label} 로딩 중...`;
@@ -1326,7 +1475,6 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             window.legendBoxInstance = null;
             window.gridVisualizer = null;
 
-            const cacheKey = ds.cacheKey || key;
             let metadata, binaryData;
             let fromCache = false; // 브라우저 캐시(Cache API/IndexedDB) 히트 여부
             let fileSize = 0; // 로딩한 파일(번들/bin) 바이트 수
@@ -1337,11 +1485,11 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 framePool = cached.framePool || null;
                 fromCache = true; // 인메모리 캐시 히트 (브라우저 스토리지 재사용 포함)
                 fileSize = cached.fileSize || 0;
-            } else if (ds.bundle) {
+            } else {
                 // 타임랩스 번들 로드: 단일 .bin.gz (JSON 헤더 + gzip 멤버) → 프레임 0 복원 → FramePool 생성
                 const loader = new WindDataLoader();
                 const baseLabel = `${ds.label} 로딩 중`;
-                const bundle = await loader.loadBundle(ds.bundle, (pct) => {
+                const bundle = await loader.loadBundle(bundleUrl, (pct) => {
                     if (loadingText) loadingText.textContent = `${baseLabel} ${pct}%`;
                 });
                 fromCache = !!loader.cacheStatus.fromCache;
@@ -1371,22 +1519,12 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
                 binaryData = entry.data;
                 framePool = pool;
                 datasetCache[cacheKey] = { metadata, binaryData, framePool: pool, loader, bundle, fileSize };
-            } else {
-                // progress % 표시: bin 다운로드 스트리밍 (json은 병렬로 별도 fetch)
-                const baseLabel = `${ds.label} 로딩 중`;
-                const metaPromise = fetch(ds.json).then(r => r.json()).then(j => j.metadata);
-                binaryData = await fetchWithProgress(ds.bin, (pct) => {
-                    if (loadingText) loadingText.textContent = `${baseLabel} ${pct}%`;
-                });
-                metadata = await metaPromise;
-                fileSize = binaryData.byteLength;
-                datasetCache[cacheKey] = { metadata, binaryData, fileSize };
             }
             // 다운로드 완료 → 동기 처리(엔진 생성) 구간으로 라벨 전환
             if (loadingText) loadingText.textContent = `${ds.label} 데이터 처리 중...`;
 
             updateDatasetInfoPanel(metadata);
-            updateCacheStatusDisplay(ds.bundle, fromCache);
+            updateCacheStatusDisplay(bundleUrl, fromCache);
 
             // '데이터셋 선택' 라벨 우측에 파일 크기 표시 (GB/MB/KB)
             const fileSizeEl = document.getElementById('dataset-file-size');
@@ -1524,6 +1662,93 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             loadDataset(e.target.value);
         });
     }
+
+    // ================= 번들 데이터 날짜 선택 캘린더 =================
+    const calGrid = document.getElementById('cal-grid');
+    const calTitle = document.getElementById('cal-title');
+    const calStatus = document.getElementById('cal-status');
+    const calPrevBtn = document.getElementById('cal-prev-month');
+    const calNextBtn = document.getElementById('cal-next-month');
+    let calYear = null;
+    let calMonth = null; // 0-11
+    let calSelectedDate = null; // 'YYYY-MM-DD'
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function dateToStr(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
+    function strToDate(s) {
+        const p = s.split('-');
+        return { y: +p[0], m: +p[1] - 1, d: +p[2] };
+    }
+    function initTimeToLabel(t) {
+        if (!t || t.length !== 10) return t;
+        return `${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)} ${t.slice(8,10)}:00`;
+    }
+
+    function renderCalendar() {
+        if (!calGrid) return;
+        const first = new Date(calYear, calMonth, 1);
+        const startDow = first.getDay(); // 0=일
+        const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+        const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+        let html = weekdays.map(w => `<div class="cal-dow">${w}</div>`).join('');
+        for (let i = 0; i < startDow; i++) html += '<div class="cal-day empty"></div>';
+        for (let d = 1; d <= daysInMonth; d++) {
+            const ds = dateToStr(calYear, calMonth, d);
+            const hasData = !!getInitTimesForDate(ds);
+            const isSel = ds === calSelectedDate;
+            const cls = 'cal-day' + (hasData ? ' has-data' : '') + (isSel ? ' selected' : '');
+            const dis = hasData ? '' : ' disabled';
+            html += `<div class="${cls}" data-date="${ds}"${dis} title="${hasData ? initTimeToLabel(getLatestInitTimeForDate(ds)) : '데이터 없음'}">${d}</div>`;
+        }
+        calGrid.innerHTML = html;
+        if (calTitle) calTitle.textContent = `${calYear}년 ${calMonth + 1}월`;
+        if (calStatus) {
+            if (calSelectedDate) {
+                const list = getInitTimesForDate(calSelectedDate);
+                calStatus.textContent = list
+                    ? `initTime: ${list.map(initTimeToLabel).join(', ')}`
+                    : '선택한 날짜에 데이터 없음';
+            } else {
+                calStatus.textContent = '날짜를 선택하세요';
+            }
+        }
+    }
+
+    function syncCalendarTo(dateStr) {
+        if (!dateStr) return;
+        const { y, m } = strToDate(dateStr);
+        calYear = y;
+        calMonth = m;
+        calSelectedDate = dateStr;
+        renderCalendar();
+    }
+
+    function initCalendar() {
+        if (!calGrid) return;
+        if (calPrevBtn) calPrevBtn.addEventListener('click', () => {
+            calMonth--;
+            if (calMonth < 0) { calMonth = 11; calYear--; }
+            renderCalendar();
+        });
+        if (calNextBtn) calNextBtn.addEventListener('click', () => {
+            calMonth++;
+            if (calMonth > 11) { calMonth = 0; calYear++; }
+            renderCalendar();
+        });
+        calGrid.addEventListener('click', (e) => {
+            const cell = e.target.closest('.cal-day');
+            if (!cell || cell.classList.contains('empty') || cell.disabled) return;
+            const dateStr = cell.getAttribute('data-date');
+            if (!dateStr) return;
+            const initTime = getLatestInitTimeForDate(dateStr);
+            if (!initTime) return;
+            calSelectedDate = dateStr;
+            renderCalendar();
+            const key = datasetSelect ? datasetSelect.value : currentDatasetKey;
+            loadDataset(key, initTime);
+        });
+    }
+    initCalendar();
 
     // ================= 브라우저 캐시 삭제 버튼 (접기/펴기) =================
     const cacheMgmtToggle = document.getElementById('cache-mgmt-toggle');
@@ -1727,7 +1952,14 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     }
 
     // 초기 데이터셋 로드 (타임랩스 컨트롤러 초기화 이후에 호출해야 tlState 접근 가능)
-    loadDataset('8km');
+    // 디폴트: 최신 날짜의 최신 initTime 번들 로드
+    const latestInfo = getLatestBundleInfo();
+    if (latestInfo) {
+        syncCalendarTo(latestInfo.date);
+        loadDataset('8km', latestInfo.initTime);
+    } else {
+        loadDataset('8km');
+    }
 
     if (viewer) {
         viewer.camera.flyHome = function () {
@@ -2107,6 +2339,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
 
         const uiState = {
             dataset: datasetSelect ? datasetSelect.value : '8km',
+            initTime: currentInitTime,
             baseMap: baseMapSelect ? baseMapSelect.value : 'esri-satellite',
             heightScale: heightScaleSlider ? heightScaleSlider.value : "30",
             boxFrame: toggleBoxFrame ? toggleBoxFrame.checked : false,
@@ -2154,7 +2387,8 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
         return {
             id: Date.now(),
             name: `View ${nextIndex}`, // View 1 ~ View 5 형식으로 변경
-            time: new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            // 북마크된 모델 정보 표시: [데이터셋] initTime (예: [8km] 2026092400)
+            time: `[${uiState.dataset}] ${uiState.initTime || '-'}`,
             camera: camState,
             ui: uiState
         };
@@ -2183,13 +2417,25 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     // 저장된 북마크 상태 복원 적용 함수
     async function restoreState(bookmark) {
         if (!bookmark || !viewer) return;
-
+ 
         const ui = bookmark.ui;
 
-        // 1. 데이터셋 교체
-        if (ui.dataset && ui.dataset !== currentDatasetKey) {
-            datasetSelect.value = ui.dataset;
-            await loadDataset(ui.dataset, true);
+        // 1. 데이터셋 교체 (initTime 포함) — 데이터셋 또는 initTime이 다르면 재로드
+        let targetInitTime = ui.initTime || null;
+        if (targetInitTime) {
+            const d = targetInitTime.slice(0, 8);
+            const dateStr = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+            if (!getInitTimesForDate(dateStr)) targetInitTime = getLatestInitTimeForDate(dateStr);
+        }
+        const datasetChanged = !!(ui.dataset && ui.dataset !== currentDatasetKey);
+        const initTimeChanged = !!(targetInitTime && targetInitTime !== currentInitTime);
+        if (datasetChanged || initTimeChanged) {
+            if (ui.dataset) datasetSelect.value = ui.dataset;
+            await loadDataset(ui.dataset || currentDatasetKey, targetInitTime, true);
+            if (targetInitTime) {
+                const d = targetInitTime.slice(0, 8);
+                syncCalendarTo(`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`);
+            }
         }
 
         // 2. 베이스맵 복원
@@ -2303,15 +2549,21 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             return;
         }
 
-        listEl.innerHTML = bookmarks.map(bm => `
+        listEl.innerHTML = bookmarks.map(bm => {
+            // 모델 정보 표시: [데이터셋] initTime (구버전 북마크는 저장 시각 표시)
+            // 데이터셋 라벨(3km/8km/25km)을 색상으로 구분
+            const label = (bm.ui && bm.ui.dataset)
+                ? `<span class="bm-ds bm-ds-${bm.ui.dataset}">[${bm.ui.dataset}]</span> ${bm.ui.initTime || '-'}`
+                : (bm.time || '-');
+            return `
             <div class="bookmark-item" data-id="${bm.id}">
                 <div class="bookmark-info">
                     <span class="bookmark-name">${bm.name}</span>
-                    <span class="bookmark-time">${bm.time}</span>
+                    <span class="bookmark-time">${label}</span>
                 </div>
                 <button class="bookmark-del-btn" title="삭제">✕</button>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
 
         // 이벤트 바인딩
         listEl.querySelectorAll('.bookmark-item').forEach(item => {
