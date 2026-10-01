@@ -957,10 +957,17 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
 <script src="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Cesium.js"></script>
 
 <script type="module">
-    import { GpuParticleEngine } from '/temp_data/wind3d/GpuParticleEngine.js';
-    import { WindLegendBox } from '/temp_data/wind3d/WindLegendBox.js';
-    import { GridVisualizer } from '/temp_data/wind3d/GridVisualizer.js';
-    import { WindDataLoader, FramePool, bundleCache } from '/temp_data/wind3d/WindDataLoader.js';
+    // ─── wind3d 파일 루트 경로 (버전별 관리용) ─────────────────────────
+    // 엔진 모듈(.js)과 데이터 파일(.bin.gz/.json/.bin) 모두 이 루트 아래에서
+    // 로드된다. 버전 변경 시 이 값만 수정하면 된다.
+    //   예: '/temp_data/wind3d'      → v1 (기본)
+    //       '/temp_data/wind3d/v2'   → v2
+    const WIND3D_ROOT = '/temp_data/wind3d/v2';
+
+    const { GpuParticleEngine } = await import(`${WIND3D_ROOT}/GpuParticleEngine.js`);
+    const { WindLegendBox } = await import(`${WIND3D_ROOT}/WindLegendBox.js`);
+    const { GridVisualizer } = await import(`${WIND3D_ROOT}/GridVisualizer.js`);
+    const { WindDataLoader, FramePool, bundleCache } = await import(`${WIND3D_ROOT}/WindDataLoader.js`);
 
     const CAMERA = {
         destination: { lon: 128.666575, lat: 23.075479, height: 1618355 },
@@ -1115,10 +1122,10 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
 
     const DATASETS = {
         '3km': {
-            bundle: `/temp_data/wind3d/r030-easia/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
+            bundle: `${WIND3D_ROOT}/r030-easia/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
             cacheKey: `r030-easia_${trg_dt}`,
-            json: `/temp_data/wind3d/r030-easia/${trg_date}/metadata.json`,
-            bin:  `/temp_data/wind3d/r030-easia/${trg_date}/wind_data_3d.bin`,
+            json: `${WIND3D_ROOT}/r030-easia/${trg_date}/metadata.json`,
+            bin:  `${WIND3D_ROOT}/r030-easia/${trg_date}/wind_data_3d.bin`,
             label: '3km 격자 (r030 동아시아)',
             camera: {
                 destination: { lon: 126.0, lat: 36.5, height: 15000000 },
@@ -1126,10 +1133,10 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             }
         },
         '8km': {
-            bundle: `/temp_data/wind3d/g576-easia/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
+            bundle: `${WIND3D_ROOT}/g576-easia/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
             cacheKey: `g576-easia_${trg_dt}`,
-            json: `/temp_data/wind3d/g576-easia/${trg_date}/metadata.json`,
-            bin:  `/temp_data/wind3d/g576-easia/${trg_date}/wind_data_3d.bin`,
+            json: `${WIND3D_ROOT}/g576-easia/${trg_date}/metadata.json`,
+            bin:  `${WIND3D_ROOT}/g576-easia/${trg_date}/wind_data_3d.bin`,
             label: '8km 격자 (g576 동아시아)',
             camera: {
                 destination: { lon: 126.0, lat: 36.5, height: 15000000 },
@@ -1137,10 +1144,10 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             }
         },
         '25km': {
-            bundle: `/temp_data/wind3d/g576-glob/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
+            bundle: `${WIND3D_ROOT}/g576-glob/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
             cacheKey: `g576-glob_${trg_dt}`,
-            json: `/temp_data/wind3d/g576-glob/${trg_date}/metadata.json`,
-            bin:  `/temp_data/wind3d/g576-glob/${trg_date}/wind_data_3d.bin`,
+            json: `${WIND3D_ROOT}/g576-glob/${trg_date}/metadata.json`,
+            bin:  `${WIND3D_ROOT}/g576-glob/${trg_date}/wind_data_3d.bin`,
             label: '25km 격자 (g576 글로벌)',
             particleCount: 60000,
             camera: {

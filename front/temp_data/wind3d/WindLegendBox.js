@@ -8,6 +8,7 @@ export class WindLegendBox {
         this.polylines = null;
         this.labelEntities = [];
         this.heightScale = 30.0;
+        this.textVisible = true;
     }
 
     init() {
@@ -116,6 +117,7 @@ export class WindLegendBox {
 
             const entity = this.viewer.entities.add({
                 position: pos,
+                show: this.textVisible,
                 label: {
                     text: labelText,
                     font: '12px sans-serif',
@@ -146,6 +148,7 @@ export class WindLegendBox {
 
     // [추가] 고도 레벨 텍스트 엔티티들 표시 여부 제어
     setTextVisible(visible) {
+        this.textVisible = visible;
         this.labelEntities.forEach(entity => {
             entity.show = visible;
         });
