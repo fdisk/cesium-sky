@@ -19,27 +19,27 @@ from datetime import datetime, timezone, timedelta
 # ====================================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 RAW_DIR = os.path.join(SCRIPT_DIR, "raw")
-
+INIT_TIME = "2026092412"
 JOBS = [
     {
         # 3km 격자 (r030 동아시아) — 전체 영역 (크롭 없음)
         "model": "r030",
         "domain": "easia",
-        "initTime": "2026092412",
+        "initTime": INIT_TIME,
         "bbox": {},
     },
     {
         # 8km 격자 (g576 동아시아) — 전체 영역 (크롭 없음)
         "model": "g576",
         "domain": "easia",
-        "initTime": "2026092412",
+        "initTime": INIT_TIME,
         "bbox": {},
     },
     {
         # 25km 격자 (g576 글로벌) — 전체 영역 (크롭 없음)
         "model": "g576",
         "domain": "glob",
-        "initTime": "2026092412",
+        "initTime": INIT_TIME,
         "bbox": {},
     },
 ]
@@ -462,14 +462,13 @@ def convert_bundle(job, out_dir):
 
 
 if __name__ == "__main__":
-    # 출력 경로: front/temp_data/wind3d/<model>-<domain>/<initTime>/  (스크립트 기준 ../temp_data/...)
+    # 출력 경로: front/temp_data/wind3d/<initTime>/  (스크립트 기준 ../temp_data/...)
+    # 모델/도메인 구분은 파일명(wind_bundle_<model>-<domain>_<initTime>.bin.gz)에 포함되므로
+    # 날짜별 단일 디렉토리로 통합 관리
     WIND3D_ROOT = os.path.join(SCRIPT_DIR, "..", "temp_data", "wind3d")
 
     for job in JOBS:
-        model = job.get("model", "wind")
-        domain = job.get("domain", "")
-        model_key = f"{model}-{domain}" if domain else model
         init_time = job.get("initTime", "latest")
-        out_dir = os.path.join(WIND3D_ROOT, model_key, init_time)
+        out_dir = os.path.join(WIND3D_ROOT, init_time)
 
         convert_bundle(job, out_dir)

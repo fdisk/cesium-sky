@@ -7,7 +7,7 @@ export class GpuParticleEngine {
         DEFAULT_HEIGHT_SCALE: 30.0,    // 높이 스케일 배율
         PARTICLE_POINT_SIZE: 1.5,     // [머리 크기] 원하는 만큼 큼직하게 조절 가능!
         TAIL_LENGTH: 0.5,              // 꼬리 길이
-        SHOW_LIMIT_SPEED: 1.0,        // 투명 처리할 최소 풍속 기준
+        SHOW_LIMIT_SPEED: 0.5,        // 투명 처리할 최소 풍속 기준
         TAIL_SEGMENTS: 8,             // [핵심] 꼬리를 구성하는 선 조각 수 (촘촘할수록 매끄러운 선이 됨)
         SPIRAL_ON: false,             // 나선 표현 on/off
         SPIRAL_THRESHOLD: 20.0,       // 나선 시작 풍속 (m/s)

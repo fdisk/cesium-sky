@@ -962,7 +962,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
     // 로드된다. 버전 변경 시 이 값만 수정하면 된다.
     //   예: '/temp_data/wind3d'      → v1 (기본)
     //       '/temp_data/wind3d/v2'   → v2
-    const WIND3D_ROOT = '/temp_data/wind3d/v2';
+    const WIND3D_ROOT = '/temp_data/wind3d';
 
     const { GpuParticleEngine } = await import(`${WIND3D_ROOT}/GpuParticleEngine.js`);
     const { WindLegendBox } = await import(`${WIND3D_ROOT}/WindLegendBox.js`);
@@ -1122,18 +1122,16 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
 
     const DATASETS = {
         '3km': {
-            bundle: `${WIND3D_ROOT}/r030-easia/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
+            bundle: `${WIND3D_ROOT}/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
             cacheKey: `r030-easia_${trg_dt}`,
-            json: `${WIND3D_ROOT}/r030-easia/${trg_date}/metadata.json`,
-            bin:  `${WIND3D_ROOT}/r030-easia/${trg_date}/wind_data_3d.bin`,
             label: '3km 격자 (r030 동아시아)',
             camera: {
-                destination: { lon: 126.0, lat: 36.5, height: 15000000 },
+                destination: { lon: 126.0, lat: 36.5, height: 7000000 },
                 orientation: { heading: 357.6, pitch: -90, roll: 0 }
             }
         },
         '8km': {
-            bundle: `${WIND3D_ROOT}/g576-easia/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
+            bundle: `${WIND3D_ROOT}/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
             cacheKey: `g576-easia_${trg_dt}`,
             json: `${WIND3D_ROOT}/g576-easia/${trg_date}/metadata.json`,
             bin:  `${WIND3D_ROOT}/g576-easia/${trg_date}/wind_data_3d.bin`,
@@ -1144,14 +1142,12 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             }
         },
         '25km': {
-            bundle: `${WIND3D_ROOT}/g576-glob/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
+            bundle: `${WIND3D_ROOT}/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
             cacheKey: `g576-glob_${trg_dt}`,
-            json: `${WIND3D_ROOT}/g576-glob/${trg_date}/metadata.json`,
-            bin:  `${WIND3D_ROOT}/g576-glob/${trg_date}/wind_data_3d.bin`,
             label: '25km 격자 (g576 글로벌)',
             particleCount: 60000,
             camera: {
-                destination: { lon: 126.0, lat: 36.5, height: 30000000 },
+                destination: { lon: 126.0, lat: 36.5, height: 15000000 },
                 orientation: { heading: 357.6, pitch: -90, roll: 0 }
             }
         }
