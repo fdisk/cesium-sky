@@ -29,7 +29,7 @@ temp_data/wind3d/<model-domain>/<date>/   (레거시: 단일 프레임)
    ├── metadata.json          (bounds, range, plev, gphByLevel)
    └── wind_data_3d.bin       (Float32 [U,V,W,GPH] 인터리브)
 
-temp_data/wind3d/<initTime>/  (타임랩스 번들: 다중 프레임, 단일 파일)
+temp_data/wind3d/bundle-data/<initTime>/  (타임랩스 번들: 다중 프레임, 단일 파일)
    └── wind_bundle_<model-domain>_<initTime>.bin.gz
        = JSON 헤더(1라인, 무압축) + '\n' + 프레임별 gzip 멤버 N개
        (멤버 = gzip 압축 uint16 [U,V,W,GPH] 인터리브)
@@ -73,10 +73,11 @@ cesium-sky/
 │       ├── WindDataLoader.js       ← .bin/.json 로더 + 번들/프레임 로더 + FramePool
 │       ├── CesiumWindEngine3D.js   ← (레거시) 3D 텍스처 방식 — 미사용
 │       │
-│       └── 2026092412/             ← 타임랩스 번들 (날짜별 단일 디렉토리, 모델/도메인 구분은 파일명)
-│           ├── wind_bundle_r030-easia_2026092412.bin.gz   (≈203 MB, 3km 동아시아)
-│           ├── wind_bundle_g576-easia_2026092412.bin.gz   (≈186 MB, 8km 동아시아)
-│           └── wind_bundle_g576-glob_2026092412.bin.gz    (≈293 MB, 25km 전지구)
+│       └── bundle-data/            ← 타임랩스 번들 데이터 전용 (엔진 모듈과 분리)
+│           └── 2026092412/         ← 날짜별 단일 디렉토리 (모델/도메인 구분은 파일명)
+│               ├── wind_bundle_r030-easia_2026092412.bin.gz   (≈203 MB, 3km 동아시아)
+│               ├── wind_bundle_g576-easia_2026092412.bin.gz   (≈186 MB, 8km 동아시아)
+│               └── wind_bundle_g576-glob_2026092412.bin.gz    (≈293 MB, 25km 전지구)
 │
 └── plans-with-ai/                  ← ai agent 에서 사용하는 플랜 문서
     ├── view-analysis.md
@@ -86,8 +87,8 @@ cesium-sky/
 > **출력 경로 규칙** (모델 세분화: `<model-domain>` = r030-easia / g576-easia / g576-glob):
 > - **레거시 (단일 프레임)**: `WIND3D_ROOT/<model-domain>/<date>/` → `metadata.json` + `wind_data_3d.bin`
 >   예: `temp_data/wind3d/r030-easia/2026-09-24/`
-> - **타임랩스 번들 (다중 프레임)**: `WIND3D_ROOT/<initTime>/` → `wind_bundle_<model-domain>_<initTime>.bin.gz` **단일 파일**
->   예: `temp_data/wind3d/2026092412/wind_bundle_g576-glob_2026092412.bin.gz`
+> - **타임랩스 번들 (다중 프레임)**: `WIND3D_ROOT/bundle-data/<initTime>/` → `wind_bundle_<model-domain>_<initTime>.bin.gz` **단일 파일**
+>   예: `temp_data/wind3d/bundle-data/2026092412/wind_bundle_g576-glob_2026092412.bin.gz`
 >   (모델/도메인 구분은 파일명에 포함 — 날짜별 단일 디렉토리로 통합 관리)
 
 ---
@@ -118,7 +119,7 @@ Cesium Viewer 생성 + UI 패널 + 엔진 부팅을 담당.
   const trg_date = `${trg_dt.slice(0,4)}-${trg_dt.slice(4,6)}-${trg_dt.slice(6,8)}`;  // YYYY-MM-DD
   const DATASETS = {
     '3km': {
-      bundle: `/temp_data/wind3d/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
+      bundle: `/temp_data/wind3d/bundle-data/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
       cacheKey: `r030-easia_${trg_dt}`,
       json: `/temp_data/wind3d/r030-easia/${trg_date}/metadata.json`,   // 레거시 폴백
       bin:  `/temp_data/wind3d/r030-easia/${trg_date}/wind_data_3d.bin`,
@@ -127,7 +128,7 @@ Cesium Viewer 생성 + UI 패널 + 엔진 부팅을 담당.
                 orientation: { heading: 357.6, pitch: -90, roll: 0 } }
     },
     '8km': {
-      bundle: `/temp_data/wind3d/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
+      bundle: `/temp_data/wind3d/bundle-data/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
       cacheKey: `g576-easia_${trg_dt}`,
       json: `/temp_data/wind3d/g576-easia/${trg_date}/metadata.json`,
       bin:  `/temp_data/wind3d/g576-easia/${trg_date}/wind_data_3d.bin`,
@@ -136,7 +137,7 @@ Cesium Viewer 생성 + UI 패널 + 엔진 부팅을 담당.
                 orientation: { heading: 357.6, pitch: -90, roll: 0 } }
     },
     '25km': {
-      bundle: `/temp_data/wind3d/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
+      bundle: `/temp_data/wind3d/bundle-data/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
       cacheKey: `g576-glob_${trg_dt}`,
       json: `/temp_data/wind3d/g576-glob/${trg_date}/metadata.json`,
       bin:  `/temp_data/wind3d/g576-glob/${trg_date}/wind_data_3d.bin`,
@@ -295,7 +296,7 @@ WIND_COLOR_MAP = [ {0: 회색}, {5: 시안}, {12: 파랑}, {20: 초록}, {30: �
   - `initTime`: 초기화 시각 `YYYYMMDDHH` (동일 묶음의 기준)
   - `inputs`: (선택) 명시적 .nc 경로 리스트. 미지정 시 `raw/` 자동 스캔 → `NC_FILE_PATTERN`(`^(?P<model>[a-z]+\d+)_v\d+_(?P<domain>[a-z]+)_prs\..+\.ft(?P<ft>\d{3})\.(?P<init>\d{10})\.nc$`)으로 **(model, domain, initTime) 그룹핑**, ft 오름차순 정렬
   - `bbox: {}` = 전체 영역 (크롭 없음)
-  - 출력: `WIND3D_ROOT/<initTime>/` (스크립트 기준 `../temp_data/wind3d/...`)
+  - 출력: `WIND3D_ROOT/bundle-data/<initTime>/` (스크립트 기준 `../temp_data/wind3d/bundle-data/...`)
     - `wind_bundle_<model-domain>_<initTime>.bin.gz` **단일 파일** (JSON 헤더 1라인 + `'\n'` + 프레임별 gzip 멤버 N개)
     - 모델/도메인 구분은 파일명에 포함 → 날짜별 단일 디렉토리로 통합 관리
 
@@ -435,7 +436,7 @@ wind_bundle_<model>_<initTime>.bin.gz
 3. **고도 과장**: `gph * heightScale` (기본 20~30x). 레벨별 실제 고도는 `gphByLevel` 참조 (선형 보간 아님).
 4. **컬러맵 단일 소스**: `WIND_COLOR_MAP`이 JS(단면 픽셀, DOM 범례) + GLSL(자동 생성) 양쪽 기준.
 5. **커스텀 DrawCommand 패턴**: `primitive.update()` 오버라이드 → 매 프레임 uniform 갱신 + commandList push.
-6. **데이터-코드 분리**: .bin/.json은 `/temp_data/wind3d/<model-domain>/<date>/`에서 로드, 번들은 `/temp_data/wind3d/<initTime>/`에서 로드. 데이터 교체 = 파일 교체.
+6. **데이터-코드 분리**: .bin/.json은 `/temp_data/wind3d/<model-domain>/<date>/`에서 로드, 번들은 `/temp_data/wind3d/bundle-data/<initTime>/`에서 로드. 데이터 교체 = 파일 교체.
 7. **다중 데이터셋**: `DATASETS` 레지스트리 + `loadDataset(key)` 런타임 전환. `[U,V,W,GPH]` 계약은 모델 무관 — g576(easia/glob)의 `hgt`가 `GPH` 슬롯으로 매핑됨 (물리량 동일: geopotential height, m).
 8. **격자 구조 자동 감지**: `nc2bin.py`가 변수명 + 좌표 차원(2D/1D) 자동 감지 → 3km(Lambert)·8km/25km(lat-lon) 동일 파이프라인.
 9. **모델 세분화 (model-domain)**: `r030-easia` / `g576-easia` / `g576-glob` 식별자로 도메인별 분리 — 동일 모델의 easia/glob 파일이 자동 스캔 시 섞이는 충돌 방지. `model_key = f"{model}-{domain}"`가 파일명/헤더 `model` 필드/`cacheKey`에 사용.
@@ -529,7 +530,7 @@ wind_bundle_<model>_<initTime>.bin.gz
 - [ ] 좌표 변환: 정규화(0~1) → `mix(range)` → `geodeticToCartesian` 순서 유지
 - [ ] 고도 렌더링은 항상 `* heightScale` 적용, 레벨별 고도는 `gphByLevel` 참조
 - [ ] UI 컨트롤은 `window.particleEngine` / `window.legendBoxInstance` / `window.gridVisualizer` 경유
-- [ ] 데이터 파일 교체 후 `metadata.json` + `wind_data_3d.bin` 짝 갱신 (`temp_data/wind3d/<model-domain>/<date>/`), 번들은 `temp_data/wind3d/<initTime>/`
+- [ ] 데이터 파일 교체 후 `metadata.json` + `wind_data_3d.bin` 짝 갱신 (`temp_data/wind3d/<model-domain>/<date>/`), 번들은 `temp_data/wind3d/bundle-data/<initTime>/`
 - [ ] 번들 데이터셋 추가 시 `DATASETS`에 `bundle` + `cacheKey` 필드 + 드롭다운 `<option>` + `nc2bin.py` `JOBS`(`model`+`domain`) 갱신 — 모델 세분화 키는 `<model>-<domain>` (r030-easia / g576-easia / g576-glob)
 - [ ] 전지구(glob) 데이터셋 추가 시 극점 경도 수렴에 따른 파티클 밀도 불균형(6.2절) 고려 — 위도 가중 샘플링 등 시각적 보완 필요
 - [ ] 번들 헤더 스키마 변경 시 `WindDataLoader.loadBundle()`/`restoreFrame()` + `view.html` 번들→엔진 메타데이터 브리지(`range.gph`, `gphByLevel`) 함께 갱신

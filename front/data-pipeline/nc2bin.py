@@ -462,10 +462,10 @@ def convert_bundle(job, out_dir):
 
 
 if __name__ == "__main__":
-    # 출력 경로: front/temp_data/wind3d/<initTime>/  (스크립트 기준 ../temp_data/...)
+    # 출력 경로: front/temp_data/wind3d/bundle-data/<initTime>/  (스크립트 기준 ../temp_data/...)
     # 모델/도메인 구분은 파일명(wind_bundle_<model>-<domain>_<initTime>.bin.gz)에 포함되므로
     # 날짜별 단일 디렉토리로 통합 관리
-    WIND3D_ROOT = os.path.join(SCRIPT_DIR, "..", "temp_data", "wind3d")
+    WIND3D_ROOT = os.path.join(SCRIPT_DIR, "..", "temp_data", "wind3d", "bundle-data")
 
     for job in JOBS:
         init_time = job.get("initTime", "latest")

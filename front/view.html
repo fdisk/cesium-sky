@@ -1118,11 +1118,11 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
 
     const trg_dt = '2026092412';
     // trg_dt(YYYYMMDDHH)를 기반으로 YYYY-MM-DD 경로용 날짜 문자열 자동 생성
-    const trg_date = `${trg_dt.slice(0, 4)}-${trg_dt.slice(4, 6)}-${trg_dt.slice(6, 8)}`;
+    // const trg_date = `${trg_dt.slice(0, 4)}-${trg_dt.slice(4, 6)}-${trg_dt.slice(6, 8)}`;
 
     const DATASETS = {
         '3km': {
-            bundle: `${WIND3D_ROOT}/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
+            bundle: `${WIND3D_ROOT}/bundle-data/${trg_dt}/wind_bundle_r030-easia_${trg_dt}.bin.gz`,
             cacheKey: `r030-easia_${trg_dt}`,
             label: '3km 격자 (r030 동아시아)',
             camera: {
@@ -1131,10 +1131,8 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             }
         },
         '8km': {
-            bundle: `${WIND3D_ROOT}/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
+            bundle: `${WIND3D_ROOT}/bundle-data/${trg_dt}/wind_bundle_g576-easia_${trg_dt}.bin.gz`,
             cacheKey: `g576-easia_${trg_dt}`,
-            json: `${WIND3D_ROOT}/g576-easia/${trg_date}/metadata.json`,
-            bin:  `${WIND3D_ROOT}/g576-easia/${trg_date}/wind_data_3d.bin`,
             label: '8km 격자 (g576 동아시아)',
             camera: {
                 destination: { lon: 126.0, lat: 36.5, height: 15000000 },
@@ -1142,7 +1140,7 @@ window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.119/B
             }
         },
         '25km': {
-            bundle: `${WIND3D_ROOT}/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
+            bundle: `${WIND3D_ROOT}/bundle-data/${trg_dt}/wind_bundle_g576-glob_${trg_dt}.bin.gz`,
             cacheKey: `g576-glob_${trg_dt}`,
             label: '25km 격자 (g576 글로벌)',
             particleCount: 60000,
